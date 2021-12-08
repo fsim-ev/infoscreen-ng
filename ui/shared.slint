@@ -1,0 +1,74 @@
+
+export DateTimePanel := HorizontalLayout {
+	property <string> title;
+	property <string> date: "PRSNT DAY...";
+	property <string> time: "PRSNT TIME...";
+	property <int> secs: 27;
+
+	//alignment: space-between;
+	spacing: 10px;
+
+	Text {
+		text: title;
+		color: #FFF;
+		font-size: 30pt;
+		font-weight: 700;
+	}
+
+	HorizontalLayout {
+		alignment: end;
+		spacing: 4px;
+
+		Text {
+			text: date;
+			color: #FFF;
+			font-size: 30pt;
+			font-weight: 600;
+		}
+		Text {
+			text: " - ";
+			color: #FFF;
+			font-size: 30pt;
+			font-weight: 600;
+		}
+		Text {
+			text: time;
+			color: #FFF;
+			font-size: 30pt;
+			font-weight: 600;
+		}
+		Rectangle {
+			width: 4px;
+			background: #555;
+			height: 31px;
+			y: 13px;
+			Rectangle {
+				height: parent.height * secs / 60;
+				y: parent.height - height;
+				background: #bbb;
+			}
+		}
+	}
+}
+
+export StatusPanel := Rectangle {
+	property <string> message: "Initialising...";
+
+	background: #3e444c;
+	border-color: #fa5;
+	border-width: 1px;
+	border-radius: 2px;
+	clip: true;
+	VerticalLayout {
+		padding: 1px;
+		alignment: start;
+		if message != "" : Text {
+			text: root.message;
+			font-size: 16pt;
+			color: #fa5;
+			wrap: word-wrap;
+			vertical-alignment: center;
+			horizontal-alignment: center;
+		}
+	}
+}

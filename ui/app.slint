@@ -1,0 +1,137 @@
+import { DateTimePanel, StatusPanel }
+	from "shared.slint";
+
+import { TimeBlock, TimeBlockPanel }
+	from "lecture.slint";
+
+export struct Headline := {
+	title: string,
+	date: string,
+	time: string,
+}
+
+export App := Window {
+	property <string> date <=> datetime.date;
+	property <string> time <=> datetime.time;
+	property <int> secs <=> datetime.secs;
+
+	property <string> bg-text:  "Loading...";
+	property <string> lectures_status <=> stat-panel.message;
+	property <string> headlines_status;
+
+	property <[TimeBlock]> time_blocks;
+	property <[Headline]> headlines;
+
+	title: "Stundenplan";
+	background: #272b30;
+	default-font-family: "Noto Sans";
+	default-font-size: 26pt;
+	min-height: 100px;
+	min-width: 300px;
+	max-width: 10000px;
+
+	// Background
+	if headlines.length == 0 : Text {
+		text: bg-text;
+		font-size: 102pt;
+		color: #FFFFFF33;
+		x: (parent.width - width) * 50%;
+		y: (parent.height - height) * 50%;
+		z: -1;
+	}
+	VerticalLayout {
+		alignment: start;
+		padding: 10px;
+		spacing: 10px;
+
+		datetime := DateTimePanel { title: root.title; }
+		stat-panel := StatusPanel { }
+		lecture-box := Flickable {
+			VerticalLayout {
+				alignment: start;
+				spacing: 10px;
+				for block in root.time_blocks : VerticalLayout {
+					TimeBlockPanel {
+						date: block.date;
+						time: block.time;
+						lectures: block.lectures;
+					}
+				}
+				if root.lectures-status == "" : Text {
+					padding-top: 200px;
+					text: "Feierabend!";
+					font-size: 40pt;
+
+					color: #fa5;
+					wrap: word-wrap;
+					vertical-alignment: center;
+					horizontal-alignment: center;
+				}
+			}
+		}
+	}
+
+	VerticalLayout {
+		height: 55px * max(headlines.length, 4);
+		padding: 7px;
+		y: parent.height - height;
+
+
+		Rectangle {
+			background: #3e444c;
+			border-color: #000;
+			border-width: 2px;
+			border-radius: 2px;
+			clip: true;
+
+			StatusPanel { message: root.headlines_status; }
+			Flickable {
+				interactive: false;
+
+				headline-list := VerticalLayout {
+					animate y { duration: 500ms; }
+					alignment: start;
+					for headline in headlines : VerticalLayout {
+						Rectangle { height: 1px; background: #000;}
+						HorizontalLayout {
+							alignment: start;
+							spacing: 10px;
+							padding-top: 2px;
+							padding-bottom: 2px;
+							padding-left: 6px;
+							padding-right: 6px;
+
+							VerticalLayout {
+								Text {
+									text: headline.date;
+									color: #fff;
+									font-weight: 700;
+									font-size: 12pt;
+								}
+								Text {
+									text: headline.time;
+									color: #fff;
+									font-weight: 500;
+									font-size: 12pt;
+								}
+							}
+							Text {
+								text: headline.title;
+								color: #fff;
+								overflow: elide;
+							}
+						}
+					}
+					Rectangle { height: 5px; background: #000;}
+				}
+			}
+		}
+	}
+	Rectangle {
+		height: 150px;
+		width: lecture-box.width;
+		x: lecture-box.x;
+		y: headline-box.y - height * 95%;
+		background: @linear-gradient(0deg, #272b30FF 0%, #272b30FF 15%,#272b3000 100%);
+	}
+}

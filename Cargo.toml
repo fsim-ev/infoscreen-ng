@@ -1,0 +1,40 @@
+[package]
+name = "infoscreen-timetable"
+version = "0.1.0"
+authors = ["Andrej Utz <utz@aix0.eu>"]
+edition = "2021"
+build = "build.rs"
+
+[features]
+default = ["slint/backend-qt"]
+x11 = ["slint/backend-gl-x11"]
+wayland = ["slint/backend-gl-wayland"]
+
+[build-dependencies]
+slint-build = "0.2"
+
+[dependencies]
+# Error handling
+anyhow = "^1"
+
+# Interface
+clap = { version = "^3", default-features = false, features = ["std", "derive"] }
+slint = { version = "^0.2", default-features = false, features = ["std", "compat-0-2-0"] }
+
+# Data
+chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
+serde = { version = "^1", features = ["derive"] }
+sys-locale ="^0.1"
+
+# I/O
+futures-util = "^0.3"
+tokio = { version = "^1.16", features = ["io-util","time"] }
+reqwest = { version = "^0.11", default-features = false, features = ["json","trust-dns"] }
+
+# Logging
+tracing = { version = "^0.1", features = ["log", "release_max_level_debug"] }
+tracing-subscriber = "0.3"
+
+
+[profile.release]
+lto = "thin"

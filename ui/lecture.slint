@@ -1,0 +1,158 @@
+export struct Course := {
+	title: string,
+	color: color,
+}
+
+export struct Location := {
+	title: string,
+	color: color,
+}
+
+export struct Lecture := {
+	title: string,
+	abbr: string,
+	lecturers: string,
+	locations: [Location],
+	courses: [Course],
+}
+
+export struct TimeBlock := {
+	date: string,
+	time: string,
+	lectures: [Lecture],
+}
+
+export LecturePanel := Rectangle {
+	property <Lecture> data;
+	property <color> text-color: #fff;
+
+	background: #32383e;
+	HorizontalLayout {
+		alignment: space-between;
+		HorizontalLayout {
+			alignment: start;
+			padding: 5px;
+			spacing: 5px;
+			Rectangle {
+				min-width: 100px;
+				max-width: 120px;
+				background: @linear-gradient(0, #5cb85c, #419641);
+				border-radius: 3px;
+				VerticalLayout {
+					padding: 2px;
+					Text {
+						text: data.abbr;
+						color: root.text-color;
+						font-family: "Noto Sans Mono";
+						font-size: 24pt;
+						overflow: elide;
+						vertical-alignment: center;
+						horizontal-alignment: center;
+					}
+				}
+			}
+			HorizontalLayout {
+				spacing: 1px;
+				for location in data.locations : Rectangle {
+					min-width: 95px;
+					max-width: 110px;
+					background: @linear-gradient(0, location.color.brighter(0.35), location.color);
+					border-radius: 3px;
+					VerticalLayout {
+						//padding: 2px;
+						Text {
+							text: location.title;
+							color: root.text-color;
+							font-family: "Noto Sans Mono";
+							font-size: 24pt;
+							overflow: elide;
+							vertical-alignment: center;
+							horizontal-alignment: center;
+						}
+					}
+				}
+			}
+			HorizontalLayout {
+				padding-left: 2px;
+				spacing: 10px;
+				Text {
+					text: data.title;
+					color: root.text-color;
+					overflow: elide;
+					vertical-alignment: center;
+				}
+				Text {
+					text: data.lecturers;
+					color: root.text-color.darker(0.8);
+					vertical-alignment: center;
+				}
+			}
+		}
+		HorizontalLayout {
+			alignment: end;
+			padding: 5px;
+			spacing: 2px;
+
+			for course in data.courses : Rectangle {
+				background: @linear-gradient(0, course.color.brighter(0.35), course.color);
+				//background: @linear-gradient(0, #5cb85c, #419641);
+				border-radius: 3px;
+				HorizontalLayout {
+					padding: 4px;
+					Text {
+						text: course.title;
+						color: root.text-color;
+						font-size: 22pt;
+						vertical-alignment: center;
+						horizontal-alignment: right;
+					}
+				}
+			}
+		}
+	}
+}
+
+export TimeBlockPanel := Rectangle {
+	property <string> date <=> date-text.text;
+	property <string> time <=> time-text.text;
+	property <[Lecture]> lectures;
+
+	background: #32383e;
+	border-color: #000;
+	border-width: 2px;
+	border-radius: 2px;
+	clip: true;
+
+	VerticalLayout {
+		padding: 1px;
+		alignment: start;
+		Rectangle {
+			background: #3e444c;
+			HorizontalLayout {
+				padding-left: 6px;
+				date-text := Text {
+					color: #fff;
+					font-weight: 600;
+					vertical-alignment: center;
+					horizontal-alignment: left;
+				}
+			}
+			HorizontalLayout {
+				time-text := Text {
+					color: #fff;
+					font-weight: 600;
+					vertical-alignment: center;
+					horizontal-alignment: center;
+				}
+			}
+		}
+		VerticalLayout {
+			//padding: 10px;
+			alignment: start;
+			for lecture in lectures : VerticalLayout {
+				Rectangle { height: 1px; background: #000;}
+				LecturePanel { data: lecture; }
+			}
+		}
+	}
+}
