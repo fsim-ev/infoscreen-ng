@@ -9,9 +9,10 @@ build = "build.rs"
 members = ["bus-schedule"]
 
 [features]
-default = ["slint/backend-qt"]
-x11 = ["slint/backend-gl-x11"]
+default = ["qt"]
+qt = ["slint/backend-qt"]
 wayland = ["slint/backend-gl-wayland"]
+x11 = ["slint/backend-gl-x11"]
 
 [build-dependencies]
 slint-build = "0.2"
