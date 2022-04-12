@@ -230,6 +230,8 @@ export Panel := Rectangle {
 
 			end := Flickable {
 			 	VerticalLayout {
+			 		alignment: start;
+
 					for departure in root.schedule : VerticalLayout {
 						if departure.deadline >= State.time : Entry {
 							data: departure;
