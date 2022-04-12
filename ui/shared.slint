@@ -1,4 +1,38 @@
 
+export Date := Text {
+	property <string> date: "PRSNT DAY...";
+
+	text: date;
+	color: #FFF;
+	font-size: 30pt;
+	font-weight: 600;
+}
+
+export Time := HorizontalLayout {
+	property <string> time: "PRSNT TIME...";
+	property <int> secs: 27;
+
+	alignment: end;
+	spacing: 4px;
+	Text {
+		text: time;
+		color: #FFF;
+		font-size: 30pt;
+		font-weight: 600;
+	}
+	Rectangle {
+		width: 4px;
+		background: #555;
+		height: 31px;
+		y: 13px;
+		Rectangle {
+			height: parent.height * secs / 60;
+			y: parent.height - height;
+			background: #bbb;
+		}
+	}
+}
+
 export DateTimePanel := HorizontalLayout {
 	property <string> title;
 	property <string> date: "PRSNT DAY...";

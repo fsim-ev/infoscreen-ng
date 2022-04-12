@@ -1,17 +1,15 @@
 [package]
-name = "infoscreen-timetable"
+name = "infoscreen-bus-schedule"
 version = "0.1.0"
 authors = ["Andrej Utz <utz@aix0.eu>"]
 edition = "2021"
 build = "build.rs"
 
-[workspace]
-members = ["bus-schedule"]
-
 [features]
-default = ["slint/backend-qt"]
-x11 = ["slint/backend-gl-x11"]
+default = ["qt"]
+qt = ["slint/backend-qt"]
 wayland = ["slint/backend-gl-wayland"]
+x11 = ["slint/backend-gl-x11"]
 
 [build-dependencies]
 slint-build = "0.2"
@@ -27,17 +25,15 @@ slint = { version = "^0.2", default-features = false, features = ["std", "compat
 # Data
 chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
 serde = { version = "^1", features = ["derive"] }
-sys-locale ="^0.1"
+sys-locale = "0.2.0"
 
 # I/O
 futures-util = "^0.3"
 tokio = { version = "^1.16", features = ["io-util","time"] }
-reqwest = { version = "^0.11", default-features = false, features = ["json","trust-dns"] }
+tokio-stream = { version = "^0.1.8" }
+reqwest = { version = "^0.11", features = ["json","trust-dns"] }
 
 # Logging
 tracing = { version = "^0.1", features = ["log", "release_max_level_debug"] }
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-
-[profile.release]
-lto = "thin"

@@ -1,0 +1,71 @@
+import { Date as DatePanel, Time as TimePanel, StatusPanel }
+	from "../../ui/shared.slint";
+
+import { Departure, Panel as DeparturePanel, State as DepartureState }
+	from "schedule.slint";
+
+export { DepartureState }
+
+export App := Window {
+	property <string> date <=> date.date;
+	property <string> time <=> time.time;
+	property <int> secs <=> time.secs;
+
+	property <string> status;
+
+	property <[Departure]> schedule-into-city;
+	property <[Departure]> schedule-from-city;
+
+	title: "Busfahrplan";
+	background: #272b30;
+	default-font-family: "Noto Sans";
+	default-font-size: 26pt;
+	max-width: 10000px;
+
+	// Background
+	if schedule-into-city.length == 0 && schedule-from-city.length == 0 : Text {
+		text: "Loading...";
+		font-size: 102pt;
+		color: #FFFFFF33;
+		x: (parent.width - width) * 50%;
+		y: (parent.height - height) * 30%;
+		z: 1;
+	}
+
+	VerticalLayout {
+		VerticalLayout {
+		 	padding-left: 10px;
+			padding-right: 10px;
+			padding-bottom: 10px;
+
+			HorizontalLayout {
+				alignment: space-between;
+
+				time := TimePanel {}
+				Text {
+					text: title;
+					color: #FFF;
+					font-size: 30pt;
+					font-weight: 700;
+				}
+				date := DatePanel {}
+			}
+
+			StatusPanel { message: root.status; }
+		}
+
+		VerticalLayout {
+			DeparturePanel {
+				schedule: root.schedule-into-city;
+				vertical-stretch: 1.8;
+				direction: "Stadt";
+				direction-color: #E6B867;
+			}
+			DeparturePanel {
+				schedule: root.schedule-from-city;
+				direction: "A3";
+				direction-color: #3287EB;
+			}
+		}
+	}
+}
