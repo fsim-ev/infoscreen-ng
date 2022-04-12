@@ -105,10 +105,10 @@ async fn io_run(ui: Weak<ui::App>, opt: Opt) -> Result<()>
 	let time_task = spawn({
 		let ui = ui.clone();
 		async move {
-			let mut old_date = chrono::Local.timestamp(0, 0).date();
-			let mut old_time = chrono::Local.timestamp(0, 0).time();
+			let mut old_date = Local.timestamp(0, 0).date();
+			let mut old_time = Local.timestamp(0, 0).time();
 			loop {
-				let now = chrono::Local::now();
+				let now = Local::now();
 				let new_time = if now.time().minute() != old_time.minute() {
 					let time = now.time();
 					let time_str = time.format("%H:%M").to_string();
@@ -134,14 +134,20 @@ async fn io_run(ui: Weak<ui::App>, opt: Opt) -> Result<()>
 					}
 					if let Some(time) = new_time {
 						ui.set_time(time.into());
+						ui.global::<ui::State>()
+							.set_day_time((now.hour() * 100 + now.minute()) as _);
 					}
 					ui.set_secs(now.second() as i32);
 				});
 				time::sleep(time::Duration::from_millis(250)).await;
 			};
 	}});
+/*
+	let client = http::ClientBuilder::new()
+		.cookie_store(true)
+		.build()
+		.context("failed to init http client")?;
 
-	let client = http::Client::new();
 	let _lecture_updater: task::JoinHandle<Result<()>> = spawn({
 		let ui = ui.clone();
 		let client = client.clone();
@@ -149,10 +155,7 @@ async fn io_run(ui: Weak<ui::App>, opt: Opt) -> Result<()>
 		async move {
 			loop {
 				log::debug!("Loading lectures from {} ...", &url);
-				ui.clone().upgrade_in_event_loop(move |ui| {
-					ui.set_lectures_status("Loading...".into());
-				});
-				let response: Result<Vec<Lecture>> = client.get(url.clone())
+				let response: Result<Vec<LectureOld>> = client.get(url.clone())
 					.send()
 					.and_then(http::Response::json)
 					.await.context("failed to load lectures, reloading in 30s");

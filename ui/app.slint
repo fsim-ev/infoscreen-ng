@@ -4,6 +4,10 @@ import { DateTimePanel, StatusPanel }
 import { TimeBlock, TimeBlockPanel }
 	from "lecture.slint";
 
+export global State := {
+    property<int> day_time; // in minutes
+}
+
 export struct Headline := {
 	title: string,
 	date: string,
@@ -15,8 +19,7 @@ export App := Window {
 	property <string> time <=> datetime.time;
 	property <int> secs <=> datetime.secs;
 
-	property <string> bg-text:  "Loading...";
-	property <string> lectures_status <=> stat-panel.message;
+	property <string> lectures_status;
 	property <string> headlines_status;
 
 	property <[TimeBlock]> time_blocks;
@@ -31,8 +34,8 @@ export App := Window {
 	max-width: 10000px;
 
 	// Background
-	if headlines.length == 0 : Text {
-		text: bg-text;
+	if root.time_blocks.length == 0 : Text {
+		text: "Loading...";
 		font-size: 102pt;
 		color: #FFFFFF33;
 		x: (parent.width - width) * 50%;
@@ -45,7 +48,7 @@ export App := Window {
 		spacing: 10px;
 
 		datetime := DateTimePanel { title: root.title; }
-		stat-panel := StatusPanel { }
+		StatusPanel { message: lectures-status; }
 		lecture-box := Flickable {
 			VerticalLayout {
 				alignment: start;
@@ -57,15 +60,19 @@ export App := Window {
 						lectures: block.lectures;
 					}
 				}
-				if root.lectures-status == "" : Text {
-					padding-top: 200px;
-					text: "Feierabend!";
-					font-size: 40pt;
+				if lectures_status == "" && State.day-time >= 1800 : VerticalLayout {
+					padding-top: 250px;
+					padding-bottom: 250px;
 
-					color: #fa5;
-					wrap: word-wrap;
-					vertical-alignment: center;
-					horizontal-alignment: center;
+					Text {
+						text: "Feierabend!";
+						font-size: 80pt;
+
+						color: #fa5;
+						wrap: word-wrap;
+						vertical-alignment: center;
+						horizontal-alignment: center;
+					}
 				}
 			}
 		}
