@@ -79,22 +79,19 @@ export App := Window {
 	}
 
 	VerticalLayout {
-		height: 55px * max(headlines.length, 4);
+		height: 56px * min(headlines.length, 4);
 		padding: 7px;
 		y: parent.height - height;
-
 
 		Rectangle {
 			background: #3e444c;
 			border-color: #000;
-			border-width: 2px;
+			border-width: 4px;
 			border-radius: 2px;
 			clip: true;
 
 			StatusPanel { message: root.headlines_status; }
 			Flickable {
-				interactive: false;
-
 				headline-list := VerticalLayout {
 					animate y { duration: 500ms; }
 					alignment: start;
@@ -139,6 +136,6 @@ export App := Window {
 		width: lecture-box.width;
 		x: lecture-box.x;
 		y: headline-box.y - height * 95%;
-		background: @linear-gradient(0deg, #272b30FF 0%, #272b30FF 15%,#272b3000 100%);
+		background: @linear-gradient(0deg, #272b30FF 0%, #272b30FF 5%,#272b3000 100%);
 	}
 }
