@@ -54,7 +54,8 @@ export App := Window {
 				alignment: start;
 				spacing: 10px;
 				for block in root.time_blocks : VerticalLayout {
-					TimeBlockPanel {
+					if State.day-time < 2000 && State.day-time > 0300
+					  : TimeBlockPanel {
 						date: block.date;
 						time: block.time;
 						lectures: block.lectures;
