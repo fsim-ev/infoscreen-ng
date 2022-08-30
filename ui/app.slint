@@ -1,11 +1,22 @@
-import { DateTimePanel, StatusPanel }
+import { Date as DatePanel, Time as TimePanel, StatusPanel }
 	from "shared.slint";
 
-import { TimeBlock, TimeBlockPanel }
-	from "lecture.slint";
+import { TimeBlock, TimeBlockPanel, State }
+	from "table.slint";
 
-export global State := {
-    property<int> day_time; // in minutes
+import { Headline, NewsPanel }
+	from "news.slint";
+
+export { State }
+
+global Language := {
+	property <string> title-regular: "Stundenplan";
+	property <string> title-exam: "Prüfungsplan";
+	
+	property <string> lesson-break: "Vorlesungsfrei\n¯\\_(ツ)_/¯";
+	
+	property <string> timeoff-regular: "Feierabend!";
+	property <string> timeoff-exam: "Einfach morgen weiter lernen...";
 }
 
 export struct Headline := {
@@ -15,26 +26,31 @@ export struct Headline := {
 }
 
 export App := Window {
-	property <string> date <=> datetime.date;
-	property <string> time <=> datetime.time;
-	property <int> secs <=> datetime.secs;
+	property <string> date <=> date.date;
+	property <string> time <=> time.time;
+	property <int> secs <=> time.secs;
 
-	property <string> lectures_status;
+	property <string> timetable_status;
 	property <string> headlines_status;
+
+	property <bool> loading: true;
+	property <bool> time-off: false;
+	property <int> exam-days-left: 0;
+	property <bool> exam-phase: exam-days-left > 0;
 
 	property <[TimeBlock]> time_blocks;
 	property <[Headline]> headlines;
 
-	title: "Stundenplan";
+	title: exam-phase ? Language.title-exam : Language.title-regular;
 	background: #272b30;
 	default-font-family: "Noto Sans";
-	default-font-size: 26pt;
+	default-font-size: 32px;
 	min-height: 100px;
 	min-width: 300px;
 	max-width: 10000px;
 
 	// Background
-	if root.time_blocks.length == 0 : Text {
+	if loading : Text {
 		text: "Loading...";
 		font-size: 102pt;
 		color: #FFFFFF33;
@@ -44,99 +60,111 @@ export App := Window {
 	}
 	VerticalLayout {
 		alignment: start;
-		padding: 10px;
-		spacing: 10px;
+		padding-left: 10px;
+		padding-right: 10px;
 
-		datetime := DateTimePanel { title: root.title; }
-		StatusPanel { message: lectures-status; }
-		lecture-box := Flickable {
-			VerticalLayout {
-				alignment: start;
-				spacing: 10px;
-				for block in root.time_blocks : VerticalLayout {
-					if State.day-time < 2000 && State.day-time > 0300
-					  : TimeBlockPanel {
-						date: block.date;
-						time: block.time;
-						lectures: block.lectures;
-					}
+		VerticalLayout {
+			HorizontalLayout {
+				alignment: space-between;
+				spacing: 4px;
+
+				time := TimePanel {}
+				Text {
+					text: title;
+					color: root.exam-phase ? #FAA : #FFF;
+					font-size: 30pt;
+					font-weight: 700;
+
+					horizontal-alignment: center;
 				}
-				if lectures_status == "" && State.day-time >= 1800 : VerticalLayout {
-					padding-top: 250px;
-					padding-bottom: 250px;
+				date := DatePanel {}
+			}
+			StatusPanel { message: root.timetable_status; }
+		}
+		Rectangle { height: 2px; background: #32383e;}
 
-					Text {
-						text: "Feierabend!";
-						font-size: 80pt;
+		lecture-box := VerticalLayout {
+			if !root.time-off : Flickable {
+				interactive: true;
 
-						color: #fa5;
-						wrap: word-wrap;
-						vertical-alignment: center;
-						horizontal-alignment: center;
+				VerticalLayout {
+					alignment: start;
+					spacing: 5px;
+
+					for block[idx] in root.time_blocks : VerticalLayout {
+						cache-rendering-hint: true;
+
+						if block.date != "" && idx != 0 : VerticalLayout {
+							padding-top: 4px;
+							padding-bottom: 8px;
+							Rectangle { height: 1px; background: #3e444c.brighter(100%); }
+						}
+						TimeBlockPanel { data: block; }
 					}
 				}
 			}
 		}
+
+		if !root.loading && root.time-off && root.time-blocks.length > 0 : VerticalLayout {
+			alignment: center;
+			height: root.height - headline-box.height;
+
+			Text {
+				text: root.exam-phase ? Language.timeoff-exam : Language.timeoff-regular;
+				font-size: 80pt;
+
+				color: #fa5;
+				wrap: word-wrap;
+				vertical-alignment: center;
+				horizontal-alignment: center;
+			}
+			if root.exam-phase : Text {
+				text: "(Erlösung in " + root.exam-days-left + " Tagen)";
+				font-size: 30pt;
+
+				color: #FFFFFF88;
+				wrap: word-wrap;
+				vertical-alignment: center;
+				horizontal-alignment: center;
+			}
+		}
+		if !root.loading && root.time-blocks.length == 0 : VerticalLayout {
+			alignment: center;
+			height: root.height - headline-box.height;
+
+			Text {
+				text: Language.lesson-break;
+				font-size: 80pt;
+
+				color: #fa5;
+				wrap: word-wrap;
+				vertical-alignment: center;
+				horizontal-alignment: center;
+			}
+		}
 	}
 
-	VerticalLayout {
+	headline-box := VerticalLayout {
 		height: 56px * min(headlines.length, 4);
 		padding: 7px;
 		y: parent.height - height;
+		z: 1;
 
-		Rectangle {
-			background: #3e444c;
-			border-color: #000;
-			border-width: 4px;
-			border-radius: 2px;
-			clip: true;
-
-			StatusPanel { message: root.headlines_status; }
-			Flickable {
-				headline-list := VerticalLayout {
-					animate y { duration: 500ms; }
-					alignment: start;
-					for headline in headlines : VerticalLayout {
-						Rectangle { height: 1px; background: #000;}
-						HorizontalLayout {
-							alignment: start;
-							spacing: 10px;
-							padding-top: 2px;
-							padding-bottom: 2px;
-							padding-left: 6px;
-							padding-right: 6px;
-
-							VerticalLayout {
-								Text {
-									text: headline.date;
-									color: #fff;
-									font-weight: 700;
-									font-size: 12pt;
-								}
-								Text {
-									text: headline.time;
-									color: #fff;
-									font-weight: 500;
-									font-size: 12pt;
-								}
-							}
-							Text {
-								text: headline.title;
-								color: #fff;
-								overflow: elide;
-							}
-						}
-					}
-					Rectangle { height: 5px; background: #000;}
-				}
-			}
-		}
+		StatusPanel { message: root.headlines_status; }
+		NewsPanel { data: headlines; }
 	}
-	Rectangle {
+	if lecture-box.height > 0 : Rectangle {
 		height: 150px;
 		width: lecture-box.width;
 		x: lecture-box.x;
 		y: headline-box.y - height * 95%;
 		background: @linear-gradient(0deg, #272b30FF 0%, #272b30FF 5%,#272b3000 100%);
+	}
+	Rectangle {
+		height: root.height - headline-box.y;
+		width: root.width;
+		x: lecture-box.x;
+		y: headline-box.y;
+		background: root.background;
 	}
 }

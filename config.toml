@@ -1,0 +1,23 @@
+newsfeed_url= "<url>/rss.xml"
+
+[time_off]
+start = 2359
+end = 1
+
+[untis]
+school = ""
+auth = { username = "", password = "" }
+faculty = "IM"
+day_range = 3
+
+[course_colors]
+default = 0xFF_666666
+[course_colors.map]
+"C1"       = 0xFF_BF3F2E
+
+
+[location_colors]
+default = 0xFF_666666
+[location_colors.map]
+"K1"   = 0xFF_4A78D3
+

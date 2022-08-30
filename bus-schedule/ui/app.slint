@@ -1,7 +1,7 @@
 import { Date as DatePanel, Time as TimePanel, StatusPanel }
-	from "../../ui/shared.slint";
+	from "shared.slint";
 
-import { Departure, Panel as DeparturePanel, State as DepartureState }
+import { Departure, Panel as DeparturePanel, State as DepartureState, BusStop, BusStopList }
 	from "schedule.slint";
 
 export { DepartureState }
@@ -20,6 +20,9 @@ export App := Window {
 	background: #272b30;
 	default-font-family: "Noto Sans";
 	default-font-size: 26pt;
+	// HACK: getting full width
+	min-height: 100px;
+	min-width: 300px;
 	max-width: 10000px;
 
 	// Background
@@ -33,10 +36,11 @@ export App := Window {
 	}
 
 	VerticalLayout {
+		alignment: start;
+		// Header
 		VerticalLayout {
 		 	padding-left: 10px;
 			padding-right: 10px;
-			padding-bottom: 10px;
 
 			HorizontalLayout {
 				alignment: space-between;
@@ -53,11 +57,14 @@ export App := Window {
 
 			StatusPanel { message: root.status; }
 		}
-
+		Rectangle { height: 2px; background: #32383e;}
+		
+		// Departure panels
 		VerticalLayout {
+			alignment: stretch;
+
 			DeparturePanel {
 				schedule: root.schedule-into-city;
-				vertical-stretch: 1.8;
 				direction: "Stadt";
 				direction-color: #E6B867;
 			}
@@ -65,7 +72,34 @@ export App := Window {
 				schedule: root.schedule-from-city;
 				direction: "A3";
 				direction-color: #3287EB;
+				vertical-stretch: 2;
 			}
+		}	
+	}
+
+	// Bus stop list
+	Rectangle {
+		height: 32px * busstop-panel.data.length;
+		width: 300px;
+		padding: 10px;
+
+		x: parent.width - width - padding;
+		y: parent.height - height - padding;
+		z: 10;
+
+		border-radius: 2px;
+		border-width: 2px;
+		border-color: #555;
+		background: #333;
+
+		cache-rendering-hint: true;
+
+		busstop-panel := BusStopList {
+			text-color: #888;
+
+			padding: 5px;
+			padding-left: 7px;
+			padding-right: padding-left;
 		}
 	}
 }
