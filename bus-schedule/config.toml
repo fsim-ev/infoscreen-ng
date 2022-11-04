@@ -1,17 +1,29 @@
 update_rate = 120 # seconds
-strip_from_names = "SomePrefix"
+strip_from_names = "Regensburg"
 
 [walk_speed] # in km/h
 normal = 4.5
 fast = 10.0
 
-[bus_stops."<some stop name>"]
+[bus_stops."TechCampus/OTH"]
 # <local stop> = { title = <diplay name>, distance = <..to go>, color = <background shade> }
 title = "TechCampus"
 distance = 155
 color = 0xFF_4A78D3
 
-[bus_stops."<some stop name>".stops_into_city]
+[bus_stops."TechCampus/OTH".stops_into_city]
 # Corrects lines which deviate from API indicators
 # <bus line> = { final_stops = [<stops into city>] }
-"5" = ["Endpoint", "Weichs-DEZ"]
+"5" = ["Schwabelweis Heyden", "Weichs-DEZ"]
+"19" = ["Regensburg Hbf"]
+"20" = ["Regensburg Hbf"]
+"21" = ["Regensburg Hbf"]
+
+
+[bus_stops."OTH Regensburg"]
+title = "OTH"
+distance = 545
+color = 0xFF_006633
+
+[bus_stops."OTH Regensburg".stops_into_city]
+"2" = ["Schwabenstraße"]
