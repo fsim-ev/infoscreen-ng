@@ -1,0 +1,280 @@
+struct TextBoxStyle := {
+	font-family: string,
+	font-size-factor: float,
+	text-color: brush,
+	background: brush,
+}
+
+global Style := {
+	property <string> font-family: "Noto Sans";
+	property <brush> text-color: #fff;
+
+	property <brush> block-background: #32383e;
+	property <color> block-border-color: #000;
+	property <color> block-hightlight: #fa5;
+	property <brush> header-background: #3e444c;
+	property <brush> header-background-day: 
+		@linear-gradient(90deg,
+			block-hightlight.darker(50%) 0%, block-hightlight.darker(50%) 25%,
+			header-background 40%, header-background 100%);
+
+	property <brush> entry-background: block-background;
+
+	//! All other sizes are relative to this
+	property <length> row-height: 42px;
+	property <length> header-height: row-height * 110%;
+
+	property <TextBoxStyle> lecture: {
+		font-family: "Noto Sans Mono",
+		font-size-factor: 0.80,
+		text-color: text-color,
+		background: @linear-gradient(0, #5cb85c, #419641),
+	};
+
+	property <TextBoxStyle> location: {
+		font-family: "Noto Sans Mono",
+		font-size-factor: 0.80,
+		text-color: text-color,
+		// default
+		background: @linear-gradient(0, #4A78D3.brighter(0.35), #4A78D3),
+	};
+	property <TextBoxStyle> course: {
+		font-family: font-family,
+		font-size-factor: 0.80,
+		text-color: text-color,		
+		// default
+		background: @linear-gradient(0, #4A78D3.brighter(0.35), #4A78D3),
+	};
+}
+
+// API
+//#####
+export global State := {
+	property <int> day-time; // in minutes
+}
+
+export struct Course := {
+	title: string,
+	color: color,
+}
+
+export struct Location := {
+	title: string,
+	color: color,
+}
+
+export struct Entry := {
+	title: string,
+	abbr: string,
+	lecturers: string,
+	locations: [Location],
+	courses: [Course],
+}
+
+export struct TimeBlock := {
+	date: string,
+	time: string,
+	entries: [Entry],
+}
+
+// GUI panels
+//############
+EntryPanel := Rectangle {
+	property <Entry> data;
+
+	background: Style.entry-background;
+	height: Style.row-height;
+
+	HorizontalLayout {
+		alignment: space-between;
+
+		HorizontalLayout {
+			alignment: start;
+			spacing: parent.height * 10%;
+
+			HorizontalLayout {
+				alignment: start;
+				padding: parent.height * 10%;
+				padding-right: 0px;
+				spacing: parent.height * 10%;
+
+				// Lecture abbreviation
+				Rectangle {
+					min-width: parent.height * 160%;
+					max-width: parent.height * 250%;
+					border-radius: parent.height * 5%;
+					background: Style.lecture.background;
+
+					VerticalLayout {
+						padding: parent.height * 5%;
+						lecture-text := Text {
+							text: data.abbr;
+
+							color: Style.lecture.text-color;
+							font-family: Style.lecture.font-family;
+							font-size: title-text.font-size * Style.lecture.font-size-factor;
+
+							overflow: elide;
+							vertical-alignment: center;
+							horizontal-alignment: center;
+						}
+					}
+				}
+
+				// Locations
+				HorizontalLayout {
+					spacing: parent.height * 3%;
+					min-width: parent.height * 150%;
+
+					for location[idx] in data.locations : Rectangle {
+						max-width: parent.height * 350%;
+						border-radius: parent.height * 5%;
+						background: location.color == #000 ?
+							Style.location.background :
+							@linear-gradient(0, location.color.brighter(0.35), location.color);
+
+						VerticalLayout {
+							property <length> pad-inner: parent.height * 10%;
+							property <length> pad-outer: parent.height * 20%;
+
+							padding-left: idx == 0 ? pad-outer : pad-inner;
+							padding-right: idx == data.locations.length - 1 ? pad-outer : pad-inner;
+							location-text := Text {
+								text: location.title;
+
+								color: Style.location.text-color;
+								font-family: Style.location.font-family;
+								font-size: title-text.font-size * Style.location.font-size-factor;
+
+								vertical-alignment: center;
+								horizontal-alignment: center;
+
+								letter-spacing: data.locations.length > 1 ? parent.pad-inner * -25% : 0px;
+							}
+						}
+					}
+				}
+			}
+
+			// Lecture
+			HorizontalLayout {
+				alignment: start;
+				spacing: parent.height * 4%;
+
+				// Title
+				title-text := Text {
+					text: data.title;
+
+					color: Style.text-color;
+					font-family: Style.font-family;
+					font-size: parent.height * 65%;
+
+					overflow: elide;
+					vertical-alignment: center;
+				}
+
+				// Lecturer
+				Text {
+					text: data.lecturers;
+
+					color: Style.text-color.darker(0.7);
+					font-family: Style.font-family;
+					font-size: title-text.font-size * 80%;
+
+					vertical-alignment: center;
+				}
+			}
+		}
+
+		// Courses
+		HorizontalLayout {
+			alignment: end;
+			padding: parent.height * 10%;
+			padding-left: 0px;
+			spacing: parent.height * 10%;
+
+			for course[idx] in data.courses : Rectangle {
+				border-radius: parent.height * 5%;
+				background: course.color == #000 ?
+					Style.course.background :
+					@linear-gradient(0, course.color.brighter(0.35), course.color);
+
+				VerticalLayout {
+					property <length> pad-inner: parent.height * 12%;
+					property <length> pad-outer: parent.height * 20%;
+
+					padding-left: idx == 0 ? pad-outer : pad-inner;
+					padding-right: idx == data.courses.length - 1 ? pad-outer : pad-inner;
+
+					course-text := Text {
+						text: course.title;
+
+						color: Style.course.text-color;
+						font-family: Style.course.font-family;
+						font-size: title-text.font-size * Style.course.font-size-factor;
+						
+						vertical-alignment: center;
+						horizontal-alignment: center;
+						letter-spacing: data.courses.length > 1 ? parent.pad-inner * -25% : 0px;
+					}
+				}
+			}
+		}
+	}
+}
+
+export TimeBlockPanel := Rectangle {
+	property <TimeBlock> data;
+
+	background: Style.block-background;
+	border-color: Style.block-border-color;
+	border-width: 2px;
+	border-radius: 2px;
+	clip: true;
+
+	VerticalLayout {
+		padding: 1px;
+		alignment: start;
+
+		Rectangle {
+			height: Style.header-height;
+			background:
+				data.date != ""
+				? Style.header-background-day
+				: Style.header-background;
+
+			HorizontalLayout {
+				padding-left: parent.height * 18%;
+				Text {
+					text: data.date;
+
+					color: Style.text-color;
+					font-size: parent.height * 65%;
+					font-weight: 600;
+					
+					vertical-alignment: center;
+					horizontal-alignment: left;
+				}
+			}
+			HorizontalLayout {
+				Text {
+					text: data.time;
+
+					color: Style.text-color;
+					font-size: parent.height * 65%;
+					font-weight: 600;
+					
+					vertical-alignment: center;
+					horizontal-alignment: center;
+				}
+			}
+		}
+		VerticalLayout {
+			alignment: start;
+			for lecture in data.entries : VerticalLayout {
+				Rectangle { height: 2%; background: Style.block-border-color;}
+				EntryPanel { data: lecture; }
+			}
+		}
+	}
+}

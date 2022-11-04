@@ -1,8 +1,6 @@
-export global State := {
-    property<int> time;
-}
-
 global Language := {
+	property <string> title: "Busfahrplan";
+
 	property <string> now: "jetzt";
 	property <string> minute-abbr: "min";
 	property <string> hour-abbr: "h";
@@ -14,11 +12,33 @@ global Language := {
 	property <string> stop: "Haltestelle";
 }
 
-global Palette := {
-	property <string> font-family;
-	property <color> font-color;
+global Style := {
+	property <string> font-family: "Noto Sans";
+	property <brush> text-color: #fff;
+
+	property <brush> block-background: #32383e;
+
+	property <color> dep-delay-color: #f89406;
+	property <color> dep-time-color-chill: #62c462;
+	property <color> dep-time-color-pushy: #f89406;
+	property <color> dep-time-color-crit: #ee5f5b;
+	property <color> dep-time-color-missed: #aaaaaa;
+	
+	property <color> line-background: #111;
+	property <color> line-border-color: #EDE13B;
+	property <color> line-text-color: line-border-color;
+
 }
 
+// API
+//#####
+export struct BusStop := {
+	name: string,
+	color: color,
+	distance: int, // in m
+	time_min: int, // in minutes
+	time_max: int, // in minutes
+}
 
 export struct Departure := {
 	time: string,
@@ -28,15 +48,27 @@ export struct Departure := {
 	line: string,
 	final_stop: string,
 
-	local_stop: string,
-	shade: color,
+	local_stop_idx: int,
 }
 
-Entry := Rectangle {
-	property <Departure> data;
-	property <color> text-color: #fff;
+export global State := {
+    property<int> time;
+	property <[BusStop]> local_stop_list;
+}
 
-	background: @linear-gradient(90deg, data.shade 0%,#32383e 10%, #32383e 80%, data.shade 100%);
+
+EntryPanel := Rectangle {
+	property <Departure> data;
+	property <BusStop> local-stop: State.local-stop-list[data.local-stop-idx];
+
+	property <color> text-color: Style.text-color;
+	property <color> shade: local-stop.color.darker(70%);
+
+	background: @linear-gradient(90deg,
+		shade 0%,
+		Style.block-background 10%,
+		Style.block-background 80%,
+		shade 100%);
 
 	// Base
 	HorizontalLayout {
@@ -52,6 +84,7 @@ Entry := Rectangle {
 			spacing: 15px;
 			width: 265px;
 
+			// absolute
 			HorizontalLayout {
 				alignment: start;
 				spacing: 5px;
@@ -63,27 +96,28 @@ Entry := Rectangle {
 				}
 				if data.delay != 0 : Text {
 					text: (data.delay > 0 ? "+" : "-") + data.delay;
-					color: #f89406;
+					color: Style.dep-delay-color;
 					font-size: 20pt;
 					vertical-alignment: center;
 				}
 			}
+			// remaining
 			Text {
 				property <int> remaining: data.deadline - State.time;
 
-				//text: remaining == 0 ? "🚏🚌" : remaining <= 60 ? remaining + " min" : "> 1 h";
 				text: remaining == 0 ? Language.now :
-					remaining <= 60 ? remaining + " " + Language.minute-abbr :
+					abs(remaining) <= 60 ? remaining + " " + Language.minute-abbr :
 					floor(remaining/6)/10.0 + " " + Language.hour-abbr;
-				font-size: 20pt;
+				font-size: 24pt;
+				font-weight: 600;
 				vertical-alignment: center;
 				horizontal-alignment: left;
 
 				color:
-					remaining == 0 ? #aaaaaa :
-					remaining < 5 ? #ee5f5b :
-					remaining < 10 ? #f89406 :
-					#62c462;
+					remaining < local-stop.time-min ? Style.dep-time-color-missed :
+					remaining < (local-stop.time-min+local-stop.time-max)/2 ? Style.dep-time-color-crit :
+					remaining < local-stop.time-max ? Style.dep-time-color-pushy :
+						Style.dep-time-color-chill;
 				
 				min-width: 100px;
 			}
@@ -104,8 +138,8 @@ Entry := Rectangle {
 					max-width: 130px;
 					min-width: 56px;
 					
-					background: #111;
-					border-color: #EDE13B;
+					background: Style.line-background;
+					border-color: Style.line-border-color;
 					border-radius: 4px;
 					border-width: 2px;
 
@@ -115,7 +149,7 @@ Entry := Rectangle {
 						padding-right: 5px;
 						Text {
 							text: data.line;
-							color: #EDE13B;
+							color: Style.line-text-color;
 							font-family: "Noto Sans Mono";
 							horizontal-alignment: center;
 						}
@@ -128,14 +162,13 @@ Entry := Rectangle {
 				overflow: elide;
 				color: root.text-color;
 
-				preferred-width: 550px;
+				preferred-width: 450px;
 				min-width: 100px;
-				//max-width: 350px;
 			}
 		}
 		// Local stop
 		Text {
-			text: data.local-stop;
+			text: local-stop.name;
 			overflow: elide;
 			color: root.text-color.darker(0.5);
 			font-size: 18pt;
@@ -144,10 +177,7 @@ Entry := Rectangle {
 			horizontal-alignment: right;
 			vertical-alignment: center;
 
-			//preferred-width: 300px;
-			//min-width: 100px;
-			//max-width: 300px;
-			width: 200px;
+			width: 150px;
 		}
 	}
 }
@@ -156,10 +186,7 @@ export Panel := Rectangle {
 	property <[Departure]> schedule;
 	property <string> direction;
 	property <color> direction-color;
-
-	background: #272b30FF;
-	min-height: 95px;
-
+	
 	VerticalLayout {
 		alignment: start;
 		spacing: 2px;
@@ -176,32 +203,33 @@ export Panel := Rectangle {
 				alignment: start;
 				width: 265px;
 
+				// absolute
 				Text {
 					text: Language.departure-at;
-					color: #fff;
+					color: Style.text-color;
 					font-weight: 600;
 				}
+
+				// remaining
 				Text {
 					text: "/" + Language.departure-in;
-					color: #fff;
+					color: Style.text-color;
 					font-weight: 300;
-					font-size: 16pt;
+					font-size: 24px;
 					vertical-alignment: bottom;
 				}
 			}
 
 			// Destination
 			HorizontalLayout {
-				//alignment: ;
-
 				preferred-width: 580px;
-				padding-left: 20px;
+				padding-left: 50px;
 				spacing: 20px;
 
 				// Route
 				Text {
 					text: Language.line;
-					color: #fff;
+					color: Style.text-color;
 					font-weight: 600;
 				}
 
@@ -216,37 +244,65 @@ export Panel := Rectangle {
 			// Local stop
 			Text {
 				text: Language.stop;
-				color: #fff.darker(0.8);
+				color: Style.text-color.darker(0.8);
 				font-weight: 400;
 				horizontal-alignment: right;
 
-				width: 200px;
+				width: 150px;
 			}
 		}
 
-		Rectangle { // HACK to allow overlay
-			height: 100%;
-			clip: true;
+		list := Flickable {		
+		 	VerticalLayout {
+		 		alignment: start;
+				spacing: 2px;
 
-			end := Flickable {
-			 	VerticalLayout {
-			 		alignment: start;
-
-					for departure in root.schedule : VerticalLayout {
-						if departure.deadline >= State.time : Entry {
-							data: departure;
-						}
-						Rectangle { height: 2px; }
-					}
+				for departure in root.schedule : EntryPanel {
+					data: departure;
 				}
-			}
-			Rectangle {
-				height: min(150px, root.height - root.min-height);
-				x: end.x;
-				y: end.y + end.height - height * 125%;
-				background: @linear-gradient(0deg, #272b30FF 0%, #272b30FF 15%,#272b3000 100%);
 			}
 		}
 	}
 
+	Rectangle {
+		height: min(100px, root.height - root.min-height);
+		x: list.x;
+		y: list.y + list.height - height + 1px;
+		
+		background: @linear-gradient(0deg, #272b30FF 0%, #272b30FF 15%,#272b3000 100%);
+	}
+}
+
+
+export BusStopList := VerticalLayout {
+	property <[BusStop]> data: State.local_stop_list;
+	property <color> text-color: #888;
+
+	for bus-stop in root.data : HorizontalLayout {
+		alignment: space-between;
+		spacing: 5px;
+
+		Text {
+			text: bus-stop.name;
+			font-size: 20px;
+			color: bus-stop.color;
+			vertical-alignment: center;
+
+			width: 150px;
+		}
+		Text {
+			text: bus-stop.distance + " m";
+			font-size: 16px;
+			color: text-color;
+			vertical-alignment: center;
+			//width: 50px;
+		}
+		Text {
+			text: "(" + bus-stop.time_min + " - " + bus-stop.time_max + " " + Language.minute-abbr + ")";
+			font-size: 16px;
+			color: text-color;
+			vertical-alignment: center;
+			//width: 60px;
+		}
+	}
 }

@@ -1,0 +1,17 @@
+update_rate = 120 # seconds
+strip_from_names = "SomePrefix"
+
+[walk_speed] # in km/h
+normal = 4.5
+fast = 10.0
+
+[bus_stops."<some stop name>"]
+# <local stop> = { title = <diplay name>, distance = <..to go>, color = <background shade> }
+title = "TechCampus"
+distance = 155
+color = 0xFF_4A78D3
+
+[bus_stops."<some stop name>".stops_into_city]
+# Corrects lines which deviate from API indicators
+# <bus line> = { final_stops = [<stops into city>] }
+"5" = ["Endpoint", "Weichs-DEZ"]

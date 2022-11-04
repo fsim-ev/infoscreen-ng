@@ -1,0 +1,60 @@
+export struct Headline := {
+	title: string,
+	date: string,
+	time: string,
+}
+
+export NewsPanel := Rectangle {
+	property <[Headline]> data;
+
+	property <color> text-color: #fff;
+
+	background: #3e444c;
+	border-color: #000;
+	border-width: 4px;
+	border-radius: 2px;
+	clip: true;
+
+	Flickable {
+		VerticalLayout {
+			alignment: start;
+
+			for headline in data : VerticalLayout {
+				cache-rendering-hint: true;
+
+				Rectangle { height: 1px; background: root.border-color; }
+				HorizontalLayout {
+					alignment: start;
+					spacing: 10px;
+					padding-top: 2px;
+					padding-bottom: padding-top;
+					padding-left: 8px;
+					padding-right: padding-left;
+
+					VerticalLayout {
+						Text {
+							text: headline.date;
+							color: text-color;
+							font-weight: 700;
+							font-size: 12pt;
+							horizontal-alignment: right;
+						}
+						Text {
+							text: headline.time;
+							color: text-color;
+							font-weight: 500;
+							font-size: 12pt;
+							horizontal-alignment: right;
+						}
+					}
+					Text {
+						text: headline.title;
+						color: text-color;
+						overflow: elide;
+					}
+				}
+			}
+			Rectangle { height: 5px; background: root.border-color; }
+		}
+	}
+}
