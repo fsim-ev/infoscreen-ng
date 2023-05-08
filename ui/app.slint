@@ -35,8 +35,9 @@ export App := Window {
 
 	property <bool> loading: true;
 	property <bool> time-off: false;
-	property <int> exam-days-left: 0;
-	property <bool> exam-phase: exam-days-left > 0;
+	property <int> exam-time-left: 0;
+	property <string> exam-time-left-str: 0;
+	property <bool> exam-phase: exam-time-left > 0;
 
 	property <[TimeBlock]> time_blocks;
 	property <[Headline]> headlines;
@@ -71,7 +72,7 @@ export App := Window {
 				time := TimePanel {}
 				Text {
 					text: title;
-					color: root.exam-phase ? #FAA : #FFF;
+					color: root.exam-phase ? #f66 : #FFF;
 					font-size: 30pt;
 					font-weight: 700;
 
@@ -79,10 +80,9 @@ export App := Window {
 				}
 				date := DatePanel {}
 			}
-			StatusPanel { message: root.timetable_status; }
 		}
 		Rectangle { height: 2px; background: #32383e;}
-
+		StatusPanel { message: root.timetable_status; }
 		lecture-box := VerticalLayout {
 			if !root.time-off : Flickable {
 				interactive: true;
@@ -92,14 +92,18 @@ export App := Window {
 					spacing: 5px;
 
 					for block[idx] in root.time_blocks : VerticalLayout {
+						property <bool> is_first: idx == 0;
 						cache-rendering-hint: true;
 
-						if block.date != "" && idx != 0 : VerticalLayout {
+						if block.date != "" && !is_first : VerticalLayout {
 							padding-top: 4px;
 							padding-bottom: 8px;
 							Rectangle { height: 1px; background: #3e444c.brighter(100%); }
 						}
-						TimeBlockPanel { data: block; }
+						TimeBlockPanel {
+							data: block;
+							highlight: false; // root.exam-phase && is_first;
+						}
 					}
 				}
 			}

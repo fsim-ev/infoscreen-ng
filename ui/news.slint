@@ -22,7 +22,7 @@ export NewsPanel := Rectangle {
 			for headline in data : VerticalLayout {
 				cache-rendering-hint: true;
 
-				Rectangle { height: 1px; background: root.border-color; }
+				Rectangle { height: 1px; background: border-color; }
 				HorizontalLayout {
 					alignment: start;
 					spacing: 10px;
@@ -54,7 +54,7 @@ export NewsPanel := Rectangle {
 					}
 				}
 			}
-			Rectangle { height: 5px; background: root.border-color; }
+			Rectangle { height: 5px; background: border-color; }
 		}
 	}
 }

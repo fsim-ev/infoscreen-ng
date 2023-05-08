@@ -5,17 +5,19 @@ struct TextBoxStyle := {
 	background: brush,
 }
 
-global Style := {
+export global Style := {
 	property <string> font-family: "Noto Sans";
 	property <brush> text-color: #fff;
+	property <color> exam-color: #b10000;
 
 	property <brush> block-background: #32383e;
 	property <color> block-border-color: #000;
-	property <color> block-hightlight: #fa5;
+	property <color> block-border-color-highlight: #b10000;
+	property <color> block-hightlight: #0059b1;
 	property <brush> header-background: #3e444c;
-	property <brush> header-background-day: 
+	property <brush> header-background-date:
 		@linear-gradient(90deg,
-			block-hightlight.darker(50%) 0%, block-hightlight.darker(50%) 25%,
+			block-hightlight.darker(33%) 0%, block-hightlight.darker(33%) 25%,
 			header-background 40%, header-background 100%);
 
 	property <brush> entry-background: block-background;
@@ -28,12 +30,21 @@ global Style := {
 		font-family: "Noto Sans Mono",
 		font-size-factor: 0.80,
 		text-color: text-color,
-		background: @linear-gradient(0, #5cb85c, #419641),
+		// default
+		background: @linear-gradient(0, #419641.brighter(0.35), #419641),
+	};
+
+	property <TextBoxStyle> exam: {
+		font-family: lecture.font-family,
+		font-size-factor: lecture.font-size-factor,
+		text-color: lecture.text-color,
+		// default
+		background: @linear-gradient(0, exam-color.brighter(0.35), exam-color),
 	};
 
 	property <TextBoxStyle> location: {
-		font-family: "Noto Sans Mono",
-		font-size-factor: 0.80,
+		font-family: lecture.font-family,
+		font-size-factor: lecture.font-size-factor,
 		text-color: text-color,
 		// default
 		background: @linear-gradient(0, #4A78D3.brighter(0.35), #4A78D3),
@@ -43,7 +54,7 @@ global Style := {
 		font-size-factor: 0.80,
 		text-color: text-color,		
 		// default
-		background: @linear-gradient(0, #4A78D3.brighter(0.35), #4A78D3),
+		background: location.background,
 	};
 }
 
@@ -69,6 +80,7 @@ export struct Entry := {
 	lecturers: string,
 	locations: [Location],
 	courses: [Course],
+	is_exam: bool,
 }
 
 export struct TimeBlock := {
@@ -81,6 +93,7 @@ export struct TimeBlock := {
 //############
 EntryPanel := Rectangle {
 	property <Entry> data;
+	property <TextBoxStyle> style: data.is_exam ? Style.exam : Style.lecture;
 
 	background: Style.entry-background;
 	height: Style.row-height;
@@ -100,19 +113,20 @@ EntryPanel := Rectangle {
 
 				// Lecture abbreviation
 				Rectangle {
+
 					min-width: parent.height * 160%;
 					max-width: parent.height * 250%;
 					border-radius: parent.height * 5%;
-					background: Style.lecture.background;
+					background: style.background;
 
 					VerticalLayout {
 						padding: parent.height * 5%;
 						lecture-text := Text {
 							text: data.abbr;
 
-							color: Style.lecture.text-color;
-							font-family: Style.lecture.font-family;
-							font-size: title-text.font-size * Style.lecture.font-size-factor;
+							color: root.style.text-color;
+							font-family: root.style.font-family;
+							font-size: title-text.font-size * root.style.font-size-factor;
 
 							overflow: elide;
 							vertical-alignment: center;
@@ -225,9 +239,10 @@ EntryPanel := Rectangle {
 
 export TimeBlockPanel := Rectangle {
 	property <TimeBlock> data;
+	property <bool> highlight;
 
 	background: Style.block-background;
-	border-color: Style.block-border-color;
+	border-color: highlight ? Style.block-border-color-highlight : Style.block-border-color;
 	border-width: 2px;
 	border-radius: 2px;
 	clip: true;
@@ -240,7 +255,7 @@ export TimeBlockPanel := Rectangle {
 			height: Style.header-height;
 			background:
 				data.date != ""
-				? Style.header-background-day
+				? Style.header-background-date
 				: Style.header-background;
 
 			HorizontalLayout {
