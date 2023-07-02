@@ -288,11 +288,14 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 			let mut departures: HashMap<&str, Vec<Departure>> =
 				HashMap::with_capacity(bus_stops.len());
 
+			let mut line_dist: HashMap<String, (usize, u32)> = Default::default();
+
 			loop {
 				log::info!("updating bus schedules...");
 
 				let now = chrono::Local::now();
 				let mut fetch_err = false;
+				line_dist.clear();
 
 				for (stop_idx, (stop_id, stop)) in bus_stops.iter().enumerate() {
 					log::debug!(stop = stop_id, "  fetching schedule...");
@@ -318,14 +321,26 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 						if let Some(stripped) = dep.line_destination.strip_prefix(&strip) {
 							dep.line_destination = stripped.trim().to_owned();
 						}
+
+						line_dist.entry(dep.line.clone())
+							.and_modify(|(idx, dist)| if stop.distance < *dist {
+								*idx = stop_idx;
+								*dist = stop.distance;
+							})
+							.or_insert((stop_idx, stop.distance));
 					}
 
+					let deps_new: Vec<_> = deps_new.into_iter()
+						.filter(|d| line_dist.get(&d.line).map(|(i,_)| *i == d.local_stop_idx).unwrap_or(true))
+						.collect();
+
+					let next_dep = deps_new.first().unwrap();
 					let deps_old = departures.entry(&stop_id).or_default();
 					*deps_old = deps_old.iter()
 						.cloned()
 						.filter(|d| {
 							let dtime = d.time + Duration::minutes(d.delay as _);
-							dtime < deps_new.first().unwrap().time && dtime > now - Duration::minutes(2)
+							dtime < next_dep.time && dtime > now - Duration::minutes(2)
 						})
 						.collect();
 
