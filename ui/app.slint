@@ -37,6 +37,7 @@ export component App inherits Window {
 	in property <bool> time-off: false;
 	in property <int> exam-time-left: 0;
 	in property <string> exam-time-left-str;
+	in property <string> o-time-left-str;
 
 	private property <bool> exam-phase: root.exam-time-left > 0;
 	private property <bool> lecture-break: root.time-blocks.length == 0;
@@ -162,6 +163,29 @@ export component App inherits Window {
 						}
 					}
 
+				if root.o-time-left-str != "" :
+					VerticalLayout {
+						alignment: end;
+						padding: 10px;
+
+						HorizontalLayout {
+							alignment: center;
+							Image {
+								source: @image-url("ozora.png");
+								colorize: #FFFFFF55;
+								width: 150px;
+							}
+						}
+						Text {
+							text: root.o-time-left-str;
+							font-size: 25pt;
+
+							color: #FFFFFF55;
+							wrap: word-wrap;
+							vertical-alignment: center;
+							horizontal-alignment: center;
+						}
+					}
 			}
 		}
 	}

@@ -279,9 +279,12 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 
 				let exam_end = *exam_end.read().await;
 				let exam_time_left = (exam_end - now).num_milliseconds();
+				let o_time_left = (Local.with_ymd_and_hms(2023, 7, 28, 12, 0, 0).unwrap() - now).num_milliseconds();
+				let o_time_left_str = if o_time_left > 0 { format!("{:0.8}", o_time_left as f32 / 1000.0 / 84600.0) } else { Default::default() };
 
 				ui.upgrade_in_event_loop(move |ui| {
 					ui.set_secs(now.second() as i32);
+					ui.set_o_time_left_str(o_time_left_str.into());
 					if exam_time_left >= 0 {
 						ui.set_exam_time_left(exam_time_left as _);
 						ui.set_exam_time_left_str(format!("{:0.8}", exam_time_left as f32 / 1000.0 / 84600.0).into());
