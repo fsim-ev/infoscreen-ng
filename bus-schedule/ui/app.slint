@@ -6,15 +6,15 @@ import { Departure, Panel as DeparturePanel, State as DepartureState, BusStop, B
 
 export { DepartureState }
 
-export App := Window {
-	property <string> date <=> date.date;
-	property <string> time <=> time.time;
-	property <int> secs <=> time.secs;
+export component App inherits Window {
+	in property <string> date <=> date.date;
+	in property <string> time <=> time.time;
+	in property <int> secs <=> time.secs;
 
-	property <string> status;
+	in property <string> status;
 
-	property <[Departure]> schedule-into-city;
-	property <[Departure]> schedule-from-city;
+	in property <[Departure]> schedule-into-city;
+	in property <[Departure]> schedule-from-city;
 
 	title: "Busfahrplan";
 	background: #272b30;
@@ -26,12 +26,12 @@ export App := Window {
 	max-width: 10000px;
 
 	// Background
-	if schedule-into-city.length == 0 && schedule-from-city.length == 0 : Text {
+	if root.schedule-into-city.length == 0 && root.schedule-from-city.length == 0 : Text {
 		text: "Loading...";
 		font-size: 102pt;
 		color: #FFFFFF33;
-		x: (parent.width - width) * 50%;
-		y: (parent.height - height) * 30%;
+		x: (parent.width - self.width) * 50%;
+		y: (parent.height - self.height) * 30%;
 		z: 1;
 	}
 
@@ -47,7 +47,7 @@ export App := Window {
 
 				time := TimePanel {}
 				Text {
-					text: title;
+					text: root.title;
 					color: #FFF;
 					font-size: 30pt;
 					font-weight: 700;
@@ -83,8 +83,8 @@ export App := Window {
 		width: 300px;
 		padding: 10px;
 
-		x: parent.width - width - padding;
-		y: parent.height - height - padding;
+		x: parent.width - self.width - self.padding;
+		y: parent.height - self.height - self.padding;
 		z: 10;
 
 		border-radius: 2px;
@@ -99,7 +99,7 @@ export App := Window {
 
 			padding: 5px;
 			padding-left: 7px;
-			padding-right: padding-left;
+			padding-right: self.padding-left;
 		}
 	}
 }

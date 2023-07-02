@@ -104,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		return Err("empty bus schedule".into());
 	}
 
-	let ui = ui::App::new();
+	let ui = ui::App::new()?;
 	let io_task_run = CancellationToken::new();
 	let io_task_handle = thread::Builder::new().name("io-runtime".into()).spawn({
 		let ui = ui.as_weak();
@@ -132,8 +132,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}
 	})?;
 
-	ui.run();
-	log::debug!("UI task shutting down...");
+	if let Err(err) = ui.run() {
+		log::error!(err=%err, "failed to start UI task...");
+	} else {
+		log::debug!("UI task shutting down...");
+	}
 	io_task_run.cancel();
 	cleanup_task_handle
 		.join()

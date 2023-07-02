@@ -1,21 +1,21 @@
 
-export Date := Text {
-	property <string> date: "PRSNT DAY...";
+export component Date inherits Text {
+	in property <string> date: "PRSNT DAY...";
 
-	text: date;
+	text: root.date;
 	color: #FFF;
 	font-size: 30pt;
 	font-weight: 600;
 }
 
-export Time := HorizontalLayout {
-	property <string> time: "PRSNT TIME...";
-	property <int> secs: 27;
+export component Time inherits HorizontalLayout {
+	in property <string> time: "PRSNT TIME...";
+	in property <int> secs: 27;
 
 	alignment: end;
 	spacing: 4px;
 	Text {
-		text: time;
+		text: root.time;
 		color: #FFF;
 		font-size: 30pt;
 		font-weight: 600;
@@ -26,24 +26,24 @@ export Time := HorizontalLayout {
 		height: 31px;
 		y: 13px;
 		Rectangle {
-			height: parent.height * secs / 60;
-			y: parent.height - height;
+			height: parent.height * root.secs / 60;
+			y: parent.height - self.height;
 			background: #bbb;
 		}
 	}
 }
 
-export DateTimePanel := HorizontalLayout {
-	property <string> title;
-	property <string> date: "PRSNT DAY...";
-	property <string> time: "PRSNT TIME...";
-	property <int> secs: 27;
+export component DateTimePanel inherits HorizontalLayout {
+	in property <string> title;
+	in property <string> date: "PRSNT DAY...";
+	in property <string> time: "PRSNT TIME...";
+	in property <int> secs: 27;
 
 	//alignment: space-between;
 	spacing: 10px;
 
 	Text {
-		text: title;
+		text: root.title;
 		color: #FFF;
 		font-size: 30pt;
 		font-weight: 700;
@@ -54,7 +54,7 @@ export DateTimePanel := HorizontalLayout {
 		spacing: 4px;
 
 		Text {
-			text: date;
+			text: root.date;
 			color: #FFF;
 			font-size: 30pt;
 			font-weight: 600;
@@ -66,7 +66,7 @@ export DateTimePanel := HorizontalLayout {
 			font-weight: 600;
 		}
 		Text {
-			text: time;
+			text: root.time;
 			color: #FFF;
 			font-size: 30pt;
 			font-weight: 600;
@@ -77,16 +77,16 @@ export DateTimePanel := HorizontalLayout {
 			height: 31px;
 			y: 13px;
 			Rectangle {
-				height: parent.height * secs / 60;
-				y: parent.height - height;
+				height: parent.height * root.secs / 60;
+				y: parent.height - self.height;
 				background: #bbb;
 			}
 		}
 	}
 }
 
-export StatusPanel := Rectangle {
-	property <string> message: "Initialising...";
+export component StatusPanel inherits Rectangle {
+	in property <string> message: "Initialising...";
 
 	background: #3e444c;
 	border-color: #fa5;
@@ -96,8 +96,8 @@ export StatusPanel := Rectangle {
 	VerticalLayout {
 		padding: 1px;
 		alignment: start;
-		if message != "" : Text {
-			text: message;
+		if root.message != "" : Text {
+			text: root.message;
 			font-size: 16pt;
 			color: #fa5;
 			wrap: word-wrap;

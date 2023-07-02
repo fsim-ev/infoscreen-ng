@@ -12,18 +12,18 @@ members = ["bus-schedule"]
 [features]
 default = ["qt"]
 qt = ["slint/backend-qt"]
-wayland = ["slint/backend-winit-wayland"]
-x11 = ["slint/backend-winit-x11"]
+wayland = ["slint/backend-winit-wayland", "slint/renderer-winit-skia-opengl"]
+x11 = ["slint/backend-winit-x11", "slint/renderer-winit-skia-opengl"]
 
 [build-dependencies]
-slint-build = "^0.3"
+slint-build = "^1"
 
 [dependencies]
 # Error handling
 anyhow = "^1"
 
 # Interface
-slint = { version = "^0.3", default-features = false, features = ["std", "compat-0-3-0"] }
+slint = { version = "^1", default-features = false, features = ["std", "compat-1-0"] }
 clap = { version = "^4", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 
 # Config
@@ -34,15 +34,15 @@ sys-locale = "^0.2.1"
 # Data
 chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
 serde = { version = "^1", features = ["derive"] }
-regex = { version = "^1.6", default-features = false, features = ["std"] }
-bytes = "^1.2"
+regex = { version = "^1.7", default-features = false, features = ["std"] }
+bytes = "^1.4"
 feed-rs = "^1"
 json-rpc-types = "^1.2"
-scraper = "^0.13"
+scraper = "^0.15"
 
 # I/O
 futures-util = "^0.3"
-tokio = { version = "^1.21", features = ["io-util","macros","signal","time"] }
+tokio = { version = "^1.26", features = ["io-util","macros","signal","time"] }
 tokio-util = "^0.7"
 reqwest = { version = "^0.11", features = ["cookies","json","trust-dns"] }
 
@@ -52,4 +52,3 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [profile.release]
 lto = "thin"
-

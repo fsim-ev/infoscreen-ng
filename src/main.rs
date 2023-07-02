@@ -68,7 +68,7 @@ struct TimeRange {
 	end: u32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct UntisConfig {
 	school: String,
 	auth: Auth,
@@ -87,7 +87,7 @@ impl Default for UntisConfig {
 	}
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct Auth {
 	username: String,
 	password: String,
@@ -153,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 
 	log::debug!("config: {:?}", &config);
 
-	let ui = ui::App::new();
+	let ui = ui::App::new()?;
 	let io_task_run = CancellationToken::new();
 	let io_task_handle = thread::Builder::new()
 		.name("io-runtime".into())
@@ -185,8 +185,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 			}
 		})?;
 
-	ui.run();
-	log::debug!("UI task shutting down...");
+	if let Err(err) = ui.run() {
+		log::error!(err=%err, "failed to start UI task...");
+	} else {
+		log::debug!("UI task shutting down...");
+	}
 	io_task_run.cancel();
 	cleanup_task_handle.join().expect("failed to join cleanup task");
 
@@ -328,6 +331,11 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 					entries.drain(..=idx);
 				}
 
+				ui.upgrade_in_event_loop(move |ui| {
+					ui.set_loading(false);
+					ui.set_timetable_status(Default::default());
+				}).ok();
+
 				if entries.is_empty() {
 					log::info!("loaded 0 entries");
 					continue;
@@ -363,9 +371,6 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 
 				let timetable_colors = timetable_colors.clone();
 				ui.upgrade_in_event_loop(move |ui| {
-					ui.set_loading(false);
-					ui.set_timetable_status(Default::default());
-
 					let mut dated = None;
 					let ui_blocks: Vec<ui::TimeBlock> = time_blocks.into_iter()
 						.map(|(time, entries)| {
@@ -479,7 +484,7 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 					let session = untis::Session::create(
 							&untis_conf.school,
 							untis_conf.auth.username.clone().into(),
-							untis_conf.auth.password.clone().into()
+							untis_conf.auth.password.clone().into(),
 						)
 						.await
 						.context("failed to create Untis session")?;
@@ -512,9 +517,6 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 						},
 					};
 					log::debug!("loaded {} lectures", entries.len());
-					if entries.is_empty() {
-						continue;
-					}
 					if let Some(dur) = entries.iter()
 							.max_by(|&a, &b| a.time_start.cmp(&b.time_start))
 							.and_then(|entry| (entry.time_end - now).to_std().ok()) {
@@ -611,6 +613,18 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 				err.to_string()
 			};
 			let err = anyhow::format_err!("failed to update table: {}", err);
+			log::error!("{}", err);
+			ui.upgrade_in_event_loop(move |ui| {
+				ui.set_timetable_status(error_showable(err));
+			}).ok();
+		},
+		res = exam_updater => if let Err(err) = res {
+			let err = if err.is_panic() {
+				panic_description(err.into_panic())
+			} else {
+				err.to_string()
+			};
+			let err = anyhow::format_err!("failed to update exams: {}", err);
 			log::error!("{}", err);
 			ui.upgrade_in_event_loop(move |ui| {
 				ui.set_timetable_status(error_showable(err));
@@ -816,7 +830,7 @@ async fn fetch_lecture_times(session: &untis::Session, data: &UntisData, conf: &
 			l.locations.extend(rooms);
 		}
 	}
-	Ok(lectures.into_iter().map(|(_, lecture)| lecture).collect())
+	Ok(lectures.into_values().collect())
 }
 
 async fn fetch_exam_times() -> Result<Vec<TimeEntry>> {
