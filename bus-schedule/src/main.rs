@@ -395,10 +395,13 @@ fn locale() -> chrono::Locale {
 	unsafe {
 		LOCALE_INIT.call_once(|| {
 			match sys_locale::get_locale()
-				.and_then(|locstr| chrono::Locale::try_from(locstr.as_str()).ok())
+				.ok_or("detect system locale".to_owned())
+				.and_then(|locstr| chrono::Locale::try_from(locstr.replace('-', "_").as_str())
+					.map_err(|_err| format!("parse system locale '{locstr}'"))
+				)
 			{
-				Some(loc) => LOCALE = loc,
-				None => log::error!("failed to get system locale"),
+				Ok(loc) => LOCALE = loc,
+				Err(err) => log::error!("failed to {err}"),
 			}
 		});
 		LOCALE
