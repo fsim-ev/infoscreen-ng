@@ -249,7 +249,7 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 		let exam_end = exam_end.clone();
 		async move {
 			let old_ts = Local::now() - Duration::days(1) - Duration::minutes(1);
-			let mut old_date = old_ts.date();
+			let mut old_date = old_ts.date_naive();
 			let mut old_time = old_ts.time();
 			loop {
 				let sleep_til = time::Instant::now() + time::Duration::from_millis(100);
@@ -263,8 +263,8 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 				} else {
 					None
 				};
-				let new_date = if now.date() != old_date {
-					let date = now.date();
+				let new_date = if now.date_naive() != old_date {
+					let date = now.date_naive();
 					// Remind about new year
 					let date_fmt = if date.month() == 1 { "%A, %e. %B %Y" } else { "%A, %e. %B" };
 					let date_str = date.format_localized(date_fmt, locale()).to_string();
@@ -369,9 +369,9 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 					let mut dated = None;
 					let ui_blocks: Vec<ui::TimeBlock> = time_blocks.into_iter()
 						.map(|(time, entries)| {
-							let date = (now.date() != time.date() && (dated.is_none() || dated.unwrap() != time.date()))
+							let date = (now.date_naive() != time.date_naive() && (dated.is_none() || dated.unwrap() != time.date_naive()))
 								.then(|| {
-									let date = time.date();
+									let date = time.date_naive();
 									dated = Some(date);
 									date.format_localized("%A, %e. %B", locale()).to_string().into()
 								})
@@ -775,7 +775,7 @@ async fn fetch_lecture_base_data(session: &untis::Session, faculty: &str) -> Res
 
 async fn fetch_lecture_times(session: &untis::Session, data: &UntisData, conf: &UntisConfig, day_offset: i16) -> Result<Vec<TimeEntry>>
 {
-	let today = Local::today() + Duration::days(day_offset as _);
+	let today = Local::now().date_naive() + Duration::days(day_offset as _);
 	let tomorrow = today + Duration::days(conf.day_range as _);
 
 	// let terms = session.school_years().await?; // TODO: fix fetch error during semester overlap
@@ -784,7 +784,7 @@ async fn fetch_lecture_times(session: &untis::Session, data: &UntisData, conf: &
 	let mut lectures: HashMap<u32, TimeEntry> = Default::default();
 	for class in data.classes.values() {
 		log::debug!("loading timetable for {}...", class.name);
-		let class_lectures = session.timetable(untis::TimetableType::Class, class.id, today.naive_local(), tomorrow.naive_local()).await?;
+		let class_lectures = session.timetable(untis::TimetableType::Class, class.id, today, tomorrow).await?;
 		for lecture in class_lectures {
 			let subject = match lecture.subject_ids.first() {
 				Some(id) => data.subjects.get(&id).unwrap(),

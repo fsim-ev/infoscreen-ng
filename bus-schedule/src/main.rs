@@ -171,8 +171,9 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 	let time_task = spawn({
 		let ui = ui.clone();
 		async move {
-			let mut old_date = chrono::Local.timestamp(0, 0).date();
-			let mut old_time = chrono::Local.timestamp(0, 0).time();
+			let date_zero = chrono::Local.timestamp_opt(0, 0).unwrap();
+			let mut old_date = date_zero.date_naive();
+			let mut old_time = date_zero.time();
 			loop {
 				let now = chrono::Local::now();
 				let new_time = if now.time().minute() != old_time.minute() {
@@ -183,8 +184,8 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 				} else {
 					None
 				};
-				let new_date = if now.date() != old_date {
-					let date = now.date();
+				let new_date = (now.date_naive() != old_date).then(|| {
+					let date = now.date_naive();
 					// Remind about new year
 					let date_fmt = if date.month() == 1 {
 						"%A, %e. %B %Y"
@@ -193,10 +194,8 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 					};
 					let date_str = date.format_localized(date_fmt, locale()).to_string();
 					old_date = date;
-					Some(date_str)
-				} else {
-					None
-				};
+					date_str
+				});
 
 				ui.upgrade_in_event_loop(move |ui| {
 					if let Some(date) = new_date {
@@ -503,16 +502,14 @@ impl<'de> Deserialize<'de> for Departure {
 		let stop = Stop::deserialize(deserializer)?;
 		let time_sched = {
 			let ts = stop.time_sched;
-			chrono::Local
-				.ymd(ts.year as _, ts.month, ts.day)
-				.and_hms(ts.hour, ts.minute, 0)
+			chrono::Local.with_ymd_and_hms(ts.year as _, ts.month, ts.day, ts.hour, ts.minute, 0)
+				.latest()
+				.ok_or(serde::de::Error::custom("failed to parse date time"))?
 		};
-		let delay = stop
-			.time_real
-			.map(|ts| {
-				chrono::Local
-					.ymd(ts.year as _, ts.month, ts.day)
-					.and_hms(ts.hour, ts.minute, 0)
+		let delay = stop.time_real
+			.and_then(|ts| {
+				chrono::Local.with_ymd_and_hms(ts.year as _, ts.month, ts.day, ts.hour, ts.minute, 0)
+					.latest()
 			})
 			.map(|ts_real| (ts_real - time_sched).num_minutes())
 			.unwrap_or_default();

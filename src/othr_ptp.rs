@@ -107,8 +107,7 @@ impl Session {
 			.await
 			.context("failed to fetch data")?;
 
-		let current_year = Local::today().year(); // meme eternalized
-
+		let current_year = Local::now().date_naive().year();
 		let mut exams: HashMap<_, TimeEntry> = Default::default();
 
 		let doc = Html::parse_document(&html);
