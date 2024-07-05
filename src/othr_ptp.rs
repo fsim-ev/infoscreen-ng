@@ -73,7 +73,7 @@ impl Session {
 		log::debug!("form id: {form_id}");
 
 		let forms = HashMap::from([
-			("javax.faces.ViewState", "stateless"),
+			("jakarta.faces.ViewState", "stateless"),
 			("form", "form"),
 			("form:loginGuestProject_input", &fid),
 			(form_id, ""),
