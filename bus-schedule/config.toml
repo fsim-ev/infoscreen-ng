@@ -1,17 +1,50 @@
 update_rate = 120 # seconds
-strip_from_names = "SomePrefix"
+strip_from_names = "Regensburg"
 
 [walk_speed] # in km/h
 normal = 4.5
 fast = 10.0
 
-[bus_stops."<some stop name>"]
+
+[bus_stops."TechCampus/OTH"]
 # <local stop> = { title = <diplay name>, distance = <..to go>, color = <background shade> }
 title = "TechCampus"
 distance = 155
 color = 0xFF_4A78D3
 
-[bus_stops."<some stop name>".stops_into_city]
+[bus_stops."TechCampus/OTH".stops_into_city]
 # Corrects lines which deviate from API indicators
 # <bus line> = { final_stops = [<stops into city>] }
-"5" = ["Endpoint", "Weichs-DEZ"]
+"5" = ["Schwabelweis Heyden", "Weichs-DEZ", "Hauptbahnhof"]
+"19" = ["Regensburg Hbf"]
+"20" = ["Regensburg Hbf"]
+"21" = ["Regensburg Hbf"]
+
+
+[bus_stops."OTH Regensburg"]
+title = "OTH"
+distance = 545
+color = 0xFF_006633
+
+[bus_stops."OTH Regensburg".stops_into_city]
+"2" = ["Schwabenstraße"]
+
+
+[bus_stops."Haydnstraße"]
+title = "Haydnstraße"
+distance = 570
+color = 0xFF_556633
+
+[bus_stops."Haydnstraße".stops_into_city]
+"10" = ["An der Irler Höhe"]
+
+
+[bus_stops."4014080"]
+title = "Universität"
+distance = 850
+color = 0xFF_774499
+
+[bus_stops."4014080".stops_into_city]
+"4" = ["Wutzlhofen", "FOS/BOS"]
+"C2" = ["Arnulfsplatz"]
+"C4" = ["Klenzestraße"]

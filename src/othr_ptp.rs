@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use chrono::{Datelike, Local, TimeZone};
+use chrono::{Datelike, Duration, Local, NaiveDateTime};
 use anyhow::{Result, Context};
 use reqwest as http;
 use slint::SharedString;
@@ -91,8 +91,9 @@ impl Session {
 	pub async fn fetch(&self) -> Result<Vec<TimeEntry>> {
 
 		let sel_exam = Selector::parse("table.autoTable > tbody > tr.ui-widget-content > td.tableColumn").unwrap();
-		let sel_time = Selector::parse("div.inner.head:first-child > span:first-child").unwrap();
 		let sel_room = Selector::parse("div.inner.head:first-child > span:last-child").unwrap();
+		let sel_time_start = Selector::parse("div.inner.head:first-child > span:first-child").unwrap();
+		let sel_time_end   = Selector::parse("div.inner.head > span > span:last-child > span:last-child").unwrap();
 
 		let sel_course = Selector::parse("div.inner.head > span > span:first-child").unwrap();
 		let sel_lecture = Selector::parse("div.inner > span > span > a").unwrap();
@@ -106,17 +107,25 @@ impl Session {
 			.await
 			.context("failed to fetch data")?;
 
-		let current_year = Local::today().year(); // meme eternalized
-
+		let current_year = Local::now().date_naive().year();
 		let mut exams: HashMap<_, TimeEntry> = Default::default();
 
 		let doc = Html::parse_document(&html);
 		for cell_cel in doc.select(&sel_exam) {
-			let time = match cell_cel.select(&sel_time).next() {
-				None => continue,
+			let time_start = match cell_cel.select(&sel_time_start).next() {
+				None => {
+					let text = cell_cel.inner_html();
+					if !text.is_empty() {
+						log::warn!("failed to find start time in: {text}");
+					}
+					continue;
+				},
 				Some(el) => {
 					// Fr.&nbsp;08.07., 14:15
 					let text = el.inner_html();
+					if text.trim().is_empty() {
+						continue;
+					}
 					let mut date_str = text.split_once(';')
 						.map(|(_, date)| date)
 						.unwrap_or(&text)
@@ -124,7 +133,43 @@ impl Session {
 						.to_owned();
 
 					date_str.push_str(&format!(" {current_year}")); // ensure full date
-					Local.datetime_from_str(&date_str, "%d.%m., %H:%M %Y").unwrap()
+					if let Ok(date) = NaiveDateTime::parse_from_str(&date_str, "%d.%m., %H:%M %Y")
+						.context("failed to parse exam datetime")
+						.and_then(|dt| dt.and_local_timezone(Local).single()
+							.context("failed to set exam timezone"))
+						.inspect_err(|err| log::warn!("failed to parse exam start time in: {text}: {err}"))
+					{
+						date
+					} else {
+						continue;
+					}
+				},
+			};
+			let time_end = match cell_cel.select(&sel_time_end).next() {
+				None => {
+					let text = cell_cel.inner_html();
+					if !text.is_empty() {
+						log::warn!("failed to find end time in: {text}");
+					}
+					continue;
+				},
+				Some(el) => {
+					// (90 min)
+					let text = el.inner_html().trim().to_owned();
+					if text.is_empty() {
+						continue;
+					}
+					let dur_res = text.split_once(' ') // it's a space
+						.map(|(time, _)| time)
+						.map(|s| s.trim_start_matches('(').trim())
+						.and_then(|s| s.parse::<i64>().ok());
+
+					if let Some(min) = dur_res {
+						time_start + Duration::minutes(min)
+					} else {
+						log::warn!("failed to parse exam duration ({:?}) in: {text}", dur_res);
+						continue;
+					}
 				},
 			};
 
@@ -149,12 +194,16 @@ impl Session {
 					TimeEntry {
 						title: title.into(),
 						abbr: exam_el.inner_html().trim().into(),
-						time: time.clone(), locations, courses,
+						is_exam: true,
+						time_start: time_start.clone(),
+						time_end: time_end.clone(),
+						locations: locations.into_iter().map(Into::into).collect(), 
+						courses: courses.into_iter().map(Into::into).collect(),
 					}
 				})
 				//.inspect(|lect| log::debug!("{:?}", lect))
 				.for_each(|lect| {
-					let key = (lect.time, lect.abbr.clone(), lect.courses.iter().next().unwrap().clone());
+					let key = (lect.time_start, lect.abbr.clone(), lect.courses.iter().next().unwrap().clone());
 					exams.entry(key)
 						.and_modify(|l| l.locations.extend(lect.clone().locations.into_iter()))
 						.or_insert(lect);

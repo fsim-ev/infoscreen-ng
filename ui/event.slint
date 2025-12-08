@@ -1,0 +1,330 @@
+import { Logic as TimeLogic } from "time.slint";
+
+global Language  {
+	in property <string> now: "jetzt";
+	in property <string> minute-abbr: "min";
+	in property <string> hour-abbr: "h";
+}
+
+struct Style  {
+	font-family: string,
+	text-color: brush,
+	event-start: brush,
+	event-end: brush,
+
+	block-background: brush,
+	border-color: brush,
+}
+
+// API
+//#####
+export struct Event  {
+	summary: string,
+	location: string,
+	organiser: string,
+
+	time-start: int,
+	time-end: int,
+}
+
+export global State  {
+	in property <int> time: 1696420000+2000;
+	
+	in property <int> warmup-date: 7 * 86400;
+	in property <int> warmup-time: 86400;
+
+	in property <bool> style-dark: true;
+
+	pure callback fmt-time(int) -> string;
+	pure callback fmt-date(int) -> string;
+	pure callback time-in-days(int, int) -> int;
+	pure callback is-midnight(int) -> bool;
+
+	public pure function time-progress(current: int, start: int, end: int) -> float  {
+		return min(max(0.0, (current - start)/(end - start)), 1.0);
+	}
+	public pure function is-whole-day(start: int, end: int) -> bool  {
+		return abs(time-in-days(start, end)) == 0;
+	}
+
+
+	in-out property <Style> style: style-dark ? {
+			font-family: "Noto Sans",
+			text-color: #fff,
+			event-start: #6ad,
+			event-end: #D2A71F,
+			block-background: #32383e,
+			border-color: #222,
+		} : 
+		{
+			font-family: "Noto Sans",
+			text-color: #111,
+			event-start: #37a,
+			event-end: #A28710,			
+			block-background: #cdc8c1,
+			border-color: #888,
+		};
+}
+
+
+// UI componenents
+//#################
+component TimeBlock inherits VerticalLayout {
+	in property <string> main;
+	in property <string> second;
+	in property <brush> main-color: State.style.event-start;
+	in property <brush> second-color: State.style.event-start;
+
+	property <bool> single: second == "";
+
+	width: 3.1rem;
+	spacing: -0.35rem;
+	padding-left: 10px;
+	padding-right: self.padding-left;
+
+	Text { 
+		text: main; 
+		font-size: root.single ? 1rem : 0.7rem;
+		color: root.main-color;
+		letter-spacing: root.single ? 0rem : (self.font-size / -20);
+	}
+	if !single : Text {			
+		text: second; 
+		font-size: 0.5rem;
+
+		color: root.second-color;
+		horizontal-alignment: right;
+		letter-spacing: self.font-size / -20;
+	}
+}
+
+component TimePanel inherits HorizontalLayout {
+		spacing: 5px;
+
+		@children	
+}
+
+component TimeRangeBlock inherits Rectangle {
+	in property <float> progress: 0.5;
+	in property <color> progress-color: State.style.event-end.mix(State.style.event-start, progress);
+
+	background: State.style.block-background.darker(50%);
+	border-radius: 5px;
+	border-width: (0.0 < progress && progress <= 1.0) ? 2px : 0px;
+	border-color: @linear-gradient(95deg, 
+		progress-color 0, 
+		progress-color progress, 
+		self.background progress, 
+		self.background 100%);
+	clip: true;
+
+	TimePanel {
+		@children	
+	}
+}
+
+component TimeJoin inherits Text {
+	width: 1.1rem;
+	//font-weight: 200;
+	color: State.style.text-color;
+	vertical-alignment: center;
+}
+
+
+component EntryPanel inherits Rectangle {
+	in property <Event> data;
+
+	pure function time-color(deadline: int, warmup-time: int) -> color {
+	 	State.style.event-end.mix(State.style.event-start, State.time-progress(State.time, deadline - warmup-time, deadline))
+	}
+
+	property <bool> has-range: data.time-end > 0;
+	property <bool> multi-day: has-range && State.time-in-days(data.time-start, data.time-end) > 0;
+	property <bool> whole-days: multi-day && State.is-midnight(data.time-start) && State.is-midnight(data.time-end);
+
+	property <float> progress: State.time-progress(State.time, data.time-start, data.time-end);
+	property <bool> is-running: has-range && progress > 0.0 && progress < 1.0;
+	property <bool> is-finished: (has-range ? data.time-end : data.time-start) < State.time;
+
+	property <color> date-start-color: time-color(data.time-start, State.warmup-date);
+	property <color> date-end-color: time-color(data.time-end, State.warmup-date);
+	property <color> time-start-color: time-color(data.time-start, State.warmup-time);
+	property <color> time-end-color: time-color(data.time-end, min(data.time-end - data.time-start, 3600 * 6));
+
+	in property <color> text-color: State.style.text-color;
+
+	background: State.style.block-background;
+	border-color: is-finished ? State.style.event-end : State.style.border-color;
+	border-width: 2px;
+	border-radius: 5px;
+	clip: true;
+
+	// Base
+	HorizontalLayout {
+		alignment: space-between;
+
+		padding-left: 2px;
+		padding-right: 10px;
+		padding-top: 2px;
+		padding-bottom: self.padding-top;
+		spacing: 10px;
+
+		/* Time spec. cases:
+			1. Start date and time are given:           <date(time-start)> @ <time(time-start)>
+			2. Date is given with a time range < 24 h:  <date(time-start)> @ <time(time-start) ↪ time(time-end)>
+			3. Only dates are given:                   [<date(time-start)> -> <date(time-end)>]
+			4. Dates and times are given:              [<date(time-start) ↪ time(time-start)> -> <date(time-end) ↪ time(time-end)>]
+		*/
+		HorizontalLayout {
+			alignment: space-around;
+			spacing: 10px;
+
+			// case 1: <date(time-start)> @ <time(time-start)>
+			if !multi-day && !has-range : TimePanel {
+				TimeBlock {
+					main: TimeLogic.fmt-date(data.time-start);
+					main-color: date-start-color;
+				}
+				TimeJoin { text: "@"; color: time-start-color; }
+				TimeBlock {
+					main: TimeLogic.fmt-time(data.time-start);
+					main-color: time-start-color;
+				}
+			}
+
+			// case 2: <date(time-start)> @ <time(time-start) ↪ time(time-end)>
+			if !multi-day && has-range : TimePanel {
+				TimeBlock {
+					main: TimeLogic.fmt-date(data.time-start);
+					main-color: date-start-color;
+				}
+				TimeJoin { text: "@"; color: time-start-color; }
+				TimeRangeBlock {
+					progress: root.progress;
+					TimeBlock {
+						main: TimeLogic.fmt-time(data.time-start);
+						main-color: time-start-color;
+						second: "→" + TimeLogic.fmt-time(data.time-end);
+						second-color: time-end-color;
+					}
+		
+				}
+			}
+
+			// case 3: [<date(time-start)> -> <date(time-end)>]
+			if multi-day && whole-days : TimeRangeBlock {
+				progress: root.progress;
+
+				TimeBlock {
+					main: TimeLogic.fmt-date(data.time-start);
+					main-color: date-start-color;
+				}
+				TimeJoin { text: "→"; color: time-start-color;}
+				TimeBlock {
+					main: TimeLogic.fmt-date(data.time-end);
+					main-color: date-end-color;
+				}			
+			}
+
+			// case 4: [<date(time-start) ↪ time(time-start)> -> <date(time-end) ↪ time(time-end)>]
+			if multi-day && !whole-days : TimeRangeBlock {
+				progress: root.progress;
+
+				TimeBlock {
+					main: TimeLogic.fmt-date(data.time-start);
+					main-color: date-start-color;
+					second: "@ " + TimeLogic.fmt-time(data.time-start);
+					second-color: time-start-color;
+
+				}
+				TimeJoin { text: "→"; color: time-start-color;}
+				TimeBlock {
+					main: TimeLogic.fmt-date(data.time-end);
+					main-color: date-end-color;
+					second: "@ " + TimeLogic.fmt-time(data.time-end);
+					second-color: time-end-color;
+				}
+			}
+			
+			// Summary
+			HorizontalLayout {
+				alignment: start;
+				//width: 40%;
+				horizontal-stretch: 2;
+
+				padding-top: 2px;
+				padding-bottom: self.padding-top;				
+
+				Text { 
+					text: data.summary;
+					
+					font-size: 1rem;
+					color: root.text-color;
+					horizontal-alignment: left;
+					overflow: elide;
+				}
+			}
+		}
+		Text { 
+			text: data.location; 
+			font-size: 0.5rem;
+			color: State.style.text-color.darker(50%);
+			//width: 30%;
+			overflow: elide;
+			wrap: word-wrap;
+
+			horizontal-stretch: 0.5;
+			horizontal-alignment: right;
+			vertical-alignment: top;
+		}
+	}
+}
+
+export component Panel inherits Rectangle {
+	in property <[Event]> list: [
+		{
+			summary: "Working Week",
+			location: "Fachschaft",
+			time-start: 1695463200,
+			time-end: 1695722400,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			location: "Campuswiese",
+			time-start: 1696413600,
+			time-end: 1696431600,
+		},
+		{
+			summary: "Sememster",
+			time-start: 1696370400,
+			time-end: 1703977200-3600*(1-24),
+		},
+		{
+			summary: "NEON Party",
+			location: "Alte Mälze und so.. Haydnstraße",
+			time-start: 1696968000,
+			time-end: 0,
+		},		
+	];
+		
+	in property <string> direction;
+	in property <color> direction-color;
+	
+	Flickable {
+		viewport-width: root.width;
+		//min-height: 3rem;
+
+		VerticalLayout {
+			alignment: start;
+			padding-left: 5px;
+			padding-right: self.padding-left;
+			spacing: 5px;
+
+			for entry in root.list : EntryPanel {
+				data: entry;
+			}
+		}
+	}
+}
+
+

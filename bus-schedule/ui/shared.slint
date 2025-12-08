@@ -1,92 +1,67 @@
+export global State  {
+	in property <int> time: 1696420000+2000;
+	
+	pure callback fmt-float(float, int) -> string;
+	pure callback fmt-time(int) -> string;
+	pure callback fmt-date(int) -> string;
+	pure callback dur-in-days(int) -> float;
+	pure callback is-midnight(int) -> bool;
 
-export Date := Text {
-	property <string> date: "PRSNT DAY...";
+	// Dev helpers
+	fmt-float(f, i) => { return Math.round(f * pow(10, i)) / pow(10, i) + "."; }
+	fmt-time(time) => { return "13:37"; }
+	fmt-date(date) => { return "24.07"; }
+	dur-in-days(dur) => {
+	    return dur/86400.0;
+	}
+	is-midnight(time) => {
+		return mod(floor((time+3600*2)/3600), 24) == 0 && mod(floor((time+3600*2)/60), 60) == 0;
+	}
+	//------------
 
-	text: date;
+	public pure function time-progress(current: int, start: int, end: int) -> float  {
+		return min(max(0.0, (current - start)/(end - start)), 1.0);
+	}
+
+	public pure function is-whole-day(start: int, end: int) -> bool  {
+		return abs(dur-in-days(end - start)) == 0;
+	}
+}
+
+
+export component Date inherits Text {
+	text: State.fmt-date(State.time);
 	color: #FFF;
-	font-size: 30pt;
+	font-size: 1.1rem;
 	font-weight: 600;
 }
 
-export Time := HorizontalLayout {
-	property <string> time: "PRSNT TIME...";
-	property <int> secs: 27;
+export component Time inherits HorizontalLayout {
+	in property <int> secs: mod(State.time, 60);
 
 	alignment: end;
-	spacing: 4px;
-	Text {
-		text: time;
+	spacing: 0.3rem;
+	txt := Text {
+		text: State.fmt-time(State.time);
 		color: #FFF;
-		font-size: 30pt;
+		font-size: 1.1rem;
 		font-weight: 600;
 	}
 	Rectangle {
-		width: 4px;
 		background: #555;
-		height: 31px;
-		y: 13px;
+		width: 0.5rem;
+		height: 0.9rem;
+		y: 0.35rem;
 		Rectangle {
-			height: parent.height * secs / 60;
-			y: parent.height - height;
-			background: #bbb;
+			height: parent.height * root.secs / 60;
+			y: parent.height - self.height;
+			background: root.secs < 50 ? #bbb : #eb2;
 		}
 	}
 }
 
-export DateTimePanel := HorizontalLayout {
-	property <string> title;
-	property <string> date: "PRSNT DAY...";
-	property <string> time: "PRSNT TIME...";
-	property <int> secs: 27;
-
-	//alignment: space-between;
-	spacing: 10px;
-
-	Text {
-		text: title;
-		color: #FFF;
-		font-size: 30pt;
-		font-weight: 700;
-	}
-
-	HorizontalLayout {
-		alignment: end;
-		spacing: 4px;
-
-		Text {
-			text: date;
-			color: #FFF;
-			font-size: 30pt;
-			font-weight: 600;
-		}
-		Text {
-			text: " - ";
-			color: #FFF;
-			font-size: 30pt;
-			font-weight: 600;
-		}
-		Text {
-			text: time;
-			color: #FFF;
-			font-size: 30pt;
-			font-weight: 600;
-		}
-		Rectangle {
-			width: 4px;
-			background: #555;
-			height: 31px;
-			y: 13px;
-			Rectangle {
-				height: parent.height * secs / 60;
-				y: parent.height - height;
-				background: #bbb;
-			}
-		}
-	}
-}
-
-export StatusPanel := Rectangle {
-	property <string> message: "Initialising...";
+export component StatusPanel inherits Rectangle {
+	in property <string> message: "Initialising...";
 
 	background: #3e444c;
 	border-color: #fa5;
@@ -96,7 +71,7 @@ export StatusPanel := Rectangle {
 	VerticalLayout {
 		padding: 1px;
 		alignment: start;
-		if message != "" : Text {
+		if root.message != "" : Text {
 			text: root.message;
 			font-size: 16pt;
 			color: #fa5;
@@ -106,3 +81,4 @@ export StatusPanel := Rectangle {
 		}
 	}
 }
+

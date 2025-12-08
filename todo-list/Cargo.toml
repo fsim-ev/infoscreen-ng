@@ -1,5 +1,5 @@
 [package]
-name = "infoscreen-bus-schedule"
+name = "infoscreen-todo-list"
 version = "0.2.0"
 license = "GPL-2.0-only"
 authors = ["Andrej Utz <utz@aix0.eu>"]
@@ -31,10 +31,12 @@ sys-locale.workspace = true
 # Data
 chrono.workspace = true
 serde.workspace = true
+icalendar = { version = "0.15.7", features = ["chrono-tz"] }
+hex_color = "3.0.0"
 
 # I/O
 futures-util = "^0.3"
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-util","macros","signal","time"] }
 tokio-util = "^0.7"
 tokio-stream = { version = "^0.1.12" }
 reqwest.workspace = true

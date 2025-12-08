@@ -1,0 +1,50 @@
+export global Logic {
+	in property <int> time: 1702380260;
+
+	// Date
+	pure callback fmt-date_(int) -> string;
+	public pure function fmt-date(time: int) -> string  {
+		return floor(day-in-year(time) / 7) + ".0" + mod(day-in-year(time), 7);
+	}
+	public pure function day-in-year(time: int) -> int  {
+		return mod(floor(time / (60*60*24)), 365);
+	}
+
+	// Time
+	pure callback fmt-time_(int) -> string;
+	public pure function fmt-time(time: int) -> string  {
+		return mod(floor(time / (60*60)) + 1, 24) 
+		+ ":" + mod(floor(time / 60), 60);
+	}
+}
+
+export component Date inherits Text {
+	text: Logic.fmt-date(Logic.time);
+	color: #FFF;
+	font-size: 1.1rem;
+	font-weight: 600;
+}
+
+export component Time inherits HorizontalLayout {
+	alignment: start;
+	spacing: 5px;
+	text := Text {
+		text: Logic.fmt-time(Logic.time);
+		color: #FFF;
+		font-size: 1.1rem;
+		font-weight: 600;
+	}
+	VerticalLayout {
+		padding-bottom: 0.31rem;
+		alignment: end;
+		Rectangle {
+			background: #555;
+			width: 0.2rem;
+			height: 0.83rem;
+			Rectangle {
+				height: parent.height * mod(Logic.time, 60) / 60.0;
+				background: #bbb;
+			}
+		}
+	}
+}

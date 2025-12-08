@@ -1,20 +1,16 @@
-import { Date as DatePanel, Time as TimePanel, StatusPanel }
+import { Date as DatePanel, Time as TimePanel, StatusPanel, State as TimeState }
 	from "shared.slint";
 
 import { Departure, Panel as DeparturePanel, State as DepartureState, BusStop, BusStopList }
 	from "schedule.slint";
 
-export { DepartureState }
+export { DepartureState, TimeState }
 
-export App := Window {
-	property <string> date <=> date.date;
-	property <string> time <=> time.time;
-	property <int> secs <=> time.secs;
+export component App inherits Window {
+	in property <string> status;
 
-	property <string> status;
-
-	property <[Departure]> schedule-into-city;
-	property <[Departure]> schedule-from-city;
+	in property <[Departure]> schedule-into-city;
+	in property <[Departure]> schedule-from-city;
 
 	title: "Busfahrplan";
 	background: #272b30;
@@ -26,12 +22,12 @@ export App := Window {
 	max-width: 10000px;
 
 	// Background
-	if schedule-into-city.length == 0 && schedule-from-city.length == 0 : Text {
+	if root.schedule-into-city.length == 0 && root.schedule-from-city.length == 0 : Text {
 		text: "Loading...";
 		font-size: 102pt;
 		color: #FFFFFF33;
-		x: (parent.width - width) * 50%;
-		y: (parent.height - height) * 30%;
+		x: (parent.width - self.width) * 50%;
+		y: (parent.height - self.height) * 30%;
 		z: 1;
 	}
 
@@ -47,7 +43,7 @@ export App := Window {
 
 				time := TimePanel {}
 				Text {
-					text: title;
+					text: root.title;
 					color: #FFF;
 					font-size: 30pt;
 					font-weight: 700;
@@ -80,11 +76,11 @@ export App := Window {
 	// Bus stop list
 	Rectangle {
 		height: 32px * busstop-panel.data.length;
-		width: 300px;
+		width: 350px;
 		padding: 10px;
 
-		x: parent.width - width - padding;
-		y: parent.height - height - padding;
+		x: parent.width - self.width - self.padding;
+		y: parent.height - self.height - self.padding;
 		z: 10;
 
 		border-radius: 2px;
@@ -99,7 +95,7 @@ export App := Window {
 
 			padding: 5px;
 			padding-left: 7px;
-			padding-right: padding-left;
+			padding-right: self.padding-left;
 		}
 	}
 }

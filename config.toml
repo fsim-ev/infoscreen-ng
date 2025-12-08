@@ -1,5 +1,3 @@
-newsfeed_url= "<url>/rss.xml"
-
 [time_off]
 start = 2359
 end = 1

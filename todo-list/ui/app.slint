@@ -1,0 +1,360 @@
+import { Date as DatePanel, Time as TimePanel, State as TimeState }
+	from "shared.slint";
+
+import { EventPanel, Event, TaskPanel, Task, State }
+	from "event.slint";
+
+export { State, TimeState }
+
+component PlaceholderText inherits VerticalLayout {
+	in property <string> exclaim;
+	in property <string> addendum: "Liste leer...\nNeue Einträge über unsere Cloud hinzufügen!\nhttp://cloud.fsim-ev.de";
+
+	alignment: space-around;
+	height: 100%;
+	padding-top: 2rem;
+	padding-bottom: self.padding-top;
+
+	Text {
+		text: root.exclaim;
+		color: #FFFFFF66;
+		font-size: 2rem;
+		wrap: TextWrap.word-wrap;
+		horizontal-alignment: center;
+		vertical-alignment: center;
+	}
+	Text {
+		text: root.addendum;
+		color: #FFFFFF33;
+		font-size: 1rem;
+		horizontal-alignment: center;
+		vertical-alignment: center;
+	}			
+}
+
+
+
+export component App inherits Window {
+	in property <bool> loading: true;
+
+	in property <[Event]> events: 
+	[
+		{
+			summary: "Working Week",
+			location: "Fachschaft",
+			time-start: 1695463200,
+			time-end: 1695722400,
+			categories: "Wörk, Mitwirken",
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			location: "Campuswiese",
+			time-start: 1696413600,
+			time-end: 1696431600,
+		},
+		{
+			summary: "Sememster",
+			time-start: 1696370400,
+			time-end: 1703977200-3600*(1-24)*-80,
+		},
+		{
+			summary: "NEON Party",
+			location: "Alte Mälze und so.. Haydnstraße",
+			time-start: 1696968000,
+			time-end: 1696968000 + 3600*6,
+		},	
+		{
+			summary: "NEON Party",
+			location: "Alte Mälze und so.. Haydnstraße",
+			time-start: 1696968000,
+			time-end: 1696968000 + 3600*72,
+			categories: "Wörk, Mitwirken",
+		},		
+	];
+
+	in property <[Task]> tasks:
+	[
+		{
+			summary: "Working Week",
+			organizer: "Fachschaft",
+			time-start: 1695463200,
+			time-due: 1695722400,
+			complete: true,
+			color: #4a78d3,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			time-due: 1696431600,
+			organizer: "AK-Grillen",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+		},
+		{
+			summary: "NEON Party",
+			organizer: "StuV",
+			complete: true,
+		},
+		{
+			summary: "Working Week",
+			organizer: "Fachschaft",
+			time-start: 1695463200,
+			time-due: 1695722400,
+			complete: true,
+			color: #4a78d3,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			time-due: 1696431600,
+			organizer: "AK-Grillen",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+		},
+		{
+			summary: "NEON Party",
+			organizer: "StuV",
+			complete: true,
+		},
+		{
+			summary: "Working Week",
+			organizer: "Fachschaft",
+			time-start: 1695463200,
+			time-due: 1695722400,
+			complete: true,
+			color: #4a78d3,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			time-due: 1696431600,
+			organizer: "AK-Grillen",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+		},
+		{
+			summary: "NEON Party",
+			organizer: "StuV",
+			complete: true,
+		},
+		{
+			summary: "Working Week",
+			organizer: "Fachschaft",
+			time-start: 1695463200,
+			time-due: 1695722400,
+			complete: true,
+			color: #4a78d3,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			time-due: 1696431600,
+			organizer: "AK-Grillen",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+		},
+		{
+			summary: "NEON Party",
+			organizer: "StuV",
+			complete: true,
+		},
+		{
+			summary: "Working Week",
+			organizer: "Fachschaft",
+			time-start: 1695463200,
+			time-due: 1695722400,
+			complete: true,
+			color: #4a78d3,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			time-due: 1696431600,
+			organizer: "AK-Grillen",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+		},
+		{
+			summary: "NEON Party",
+			organizer: "StuV",
+			complete: true,
+		},
+		{
+			summary: "Working Week",
+			organizer: "Fachschaft",
+			time-start: 1695463200,
+			time-due: 1695722400,
+			complete: true,
+			color: #4a78d3,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			time-due: 1696431600,
+			organizer: "AK-Grillen",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+		},
+		{
+			summary: "NEON Party",
+			organizer: "StuV",
+			complete: true,
+		},
+		{
+			summary: "Working Week",
+			organizer: "Fachschaft",
+			time-start: 1695463200,
+			time-due: 1695722400,
+			complete: true,
+			color: #4a78d3,
+		},
+		{
+			summary: "Erstigrillen für alle Erstis und weit aus mehr!!!111",
+			time-due: 1696431600,
+			organizer: "AK-Grillen",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+			color: #856415,
+		},
+		{
+			summary: "NEON Party",
+		},
+		{
+			summary: "NEON Party",
+			organizer: "StuV",
+			complete: true,
+		},
+	];
+
+
+	title: "Eventplan";
+	background: #272b30;
+	default-font-family: "Noto Sans";
+	default-font-size: 26pt;
+
+	// HACK
+	min-height: 100px;
+	min-width: 300px;
+	max-width: 10000px;
+
+	if root.loading : Text {
+		text: "Loading...";
+		font-size: 4rem;
+		color: #FFFFFF33;
+
+		horizontal-alignment: center;
+		y: 25% * root.height;
+	}
+
+	// Root Layout
+	root-lyt := VerticalLayout {
+		alignment: start;
+	 	padding-left: 0.2rem;
+		padding-right: self.padding-left;
+
+		// Header
+		HorizontalLayout {
+			alignment: space-between;
+			spacing: 20px;
+
+			time := TimePanel {}
+			Text {
+				text: root.title;
+				color: #FFF;
+				font-size: 1.1rem;
+				font-weight: 700;
+
+				horizontal-alignment: center;
+			}
+			date := DatePanel {}
+		}
+		Rectangle { height: 2px; background: #32383e; }
+		Rectangle { height: 5px; }
+		
+		// Body
+		VerticalLayout {
+			spacing: 1rem;
+
+			//min-height: 25rem;
+
+			VerticalLayout {
+				alignment: start;
+
+				min-height: root-lyt.height * 25%;
+
+				EventPanel {
+					list: root.events;
+				}
+				if !root.loading && root.events.length == 0 : PlaceholderText {
+					exclaim: "Zeit was zu unternehmen!";
+				}
+			}
+
+			VerticalLayout {
+				alignment: start;
+
+				// Header
+				HorizontalLayout {
+					alignment: space-around;
+					spacing: 20px;
+
+					Text {
+						text: "Aufgaben";
+						color: #FFF;
+						font-size: 1.1rem;
+						font-weight: 700;
+
+						horizontal-alignment: center;
+					}
+				}
+				Rectangle { height: 2px; background: #32383e; }
+				Rectangle { height: 5px; }
+
+				VerticalLayout {
+					alignment: start;
+					min-height: root-lyt.height * 25%;
+
+					TaskPanel { 
+						list: root.tasks; 
+					}
+					if !root.loading && root.tasks.length == 0 : PlaceholderText {
+						exclaim: "Alles erledigt!\n...oder?";
+					}
+				}
+			}
+		}
+	}
+}
+

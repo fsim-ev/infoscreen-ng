@@ -1,11 +1,25 @@
-struct TextBoxStyle  {
+// TODO: rewrite
+// - rem usage
+
+global Language  {
+	in property <string> title-regular: "Stundenplan";
+	in property <string> title-exam: "Prüfungsplan";
+	
+	in property <string> lesson-break: "Vorlesungsfrei\n¯\\_(ツ)_/¯";
+	
+	in property <string> timeoff-regular: "Feierabend!";
+	in property <string> timeoff-exam: "Einfach morgen weiter lernen...";
+	in property <string> timeoff-exam-end: "Erlösung in {} Tagen...";
+}
+
+struct TextBoxStyle {
 	font-family: string,
 	font-size-factor: float,
 	text-color: brush,
 	background: brush,
 }
 
-export global Style  {
+export global Style {
 	in property <string> font-family: "Noto Sans";
 	in property <brush> text-color: #fff;
 	in property <color> exam-color: #b10000;
@@ -292,4 +306,133 @@ export component TimeBlockPanel inherits Rectangle {
 			}
 		}
 	}
+}
+
+
+export component Panel inherits VerticalLayout {
+	in property <[TimeBlock]> list;
+
+	in property <bool> loading: false;
+
+	in property <bool> time-off: false;
+	in property <int> exam-time-left: 0;
+	in property <string> exam-time-left-str;
+	in property <string> o-time-left-str;
+
+	private property <bool> exam-phase: root.exam-time-left > 0;
+	private property <bool> lecture-break: root.list.length == 0;
+	private property <bool> no-lectures: root.time-off || lecture-break;
+
+	//background: #272b30;
+	alignment: start;
+
+	if !root.time-off :	Flickable {
+		z: 10;
+
+		VerticalLayout {
+			alignment: start;
+			spacing: 5px;
+
+			for block[idx] in root.list : VerticalLayout {
+				property <bool> is_first: idx == 0;
+				cache-rendering-hint: true;
+
+				if block.date != "" && !self.is_first : VerticalLayout {
+					padding-top: 4px;
+					padding-bottom: 8px;
+					Rectangle { height: 1px; background: #3e444c.brighter(100%); }
+				}
+				TimeBlockPanel {
+					data: block;
+					highlight: false; // root.exam-phase && is_first;
+				}
+			}
+		}
+	}
+
+	if root.no-lectures : Rectangle {
+		//border-color: #55f; border-width: 3px;
+		width: 100%;
+		height: 100%;
+		VerticalLayout {
+			alignment: space-around;
+
+			if root.time-off && !root.lecture-break:
+				VerticalLayout {
+					alignment: center;
+
+					Text {
+						text: root.exam-phase ? Language.timeoff-exam : Language.timeoff-regular;
+						font-size: 80pt;
+
+						color: #fa5;
+						wrap: word-wrap;
+						vertical-alignment: center;
+						horizontal-alignment: center;
+					}
+					if root.exam-phase : VerticalLayout {
+						alignment: space-between;
+						spacing: 120px;
+
+						Text {
+							text: "(Erlösung in "+ root.exam-time-left-str +" Tagen)";
+							font-size: 30pt;
+
+							color: #FFFFFF88;
+							wrap: word-wrap;
+							vertical-alignment: center;
+							horizontal-alignment: center;
+						}
+						Text {
+							text: "\"Kann nicht, muss weiter lernen\"";
+							font-size: 40pt;
+
+							color: #fa5;
+							wrap: word-wrap;
+							vertical-alignment: center;
+							horizontal-alignment: center;
+						}
+					}
+				}
+			if !root.loading && root.lecture-break :
+				VerticalLayout {
+					alignment: center;
+
+					Text {
+						text: Language.lesson-break;
+						font-size: 80pt;
+
+						color: #fa5;
+						wrap: word-wrap;
+						vertical-alignment: center;
+						horizontal-alignment: center;
+					}
+				}
+
+			if root.o-time-left-str != "" :
+				VerticalLayout {
+					alignment: end;
+					padding: 10px;
+
+					HorizontalLayout {
+						alignment: center;
+						Image {
+							source: @image-url("ozora.png");
+							colorize: #FFFFFF55;
+							width: 150px;
+						}
+					}
+					Text {
+						text: root.o-time-left-str;
+						font-size: 25pt;
+
+						color: #FFFFFF55;
+						wrap: word-wrap;
+						vertical-alignment: center;
+						horizontal-alignment: center;
+					}
+				}
+		}
+	}
+
 }

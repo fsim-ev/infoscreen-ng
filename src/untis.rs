@@ -18,7 +18,7 @@ pub struct Session {
 struct Empty {}
 
 impl Session {
-	const URL: &'static str = "https://kephiso.webuntis.com/WebUntis/jsonrpc.do";
+	const URL: &'static str = "https://othr.webuntis.com/WebUntis/jsonrpc.do";
 
 	pub async fn create<'a>(school: &str, user: Cow<'a, str>, pass: Cow<'a, str>) -> Result<Self> {
 		let client = http::ClientBuilder::new()
@@ -199,14 +199,14 @@ fn parse_untis_time<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
 	where D: Deserializer<'de>
 {
 	let t = u32::deserialize(deserializer)?;
-	Ok(NaiveTime::from_hms(t / 100, t % 100, 0))
+	Ok(NaiveTime::from_hms_opt(t / 100, t % 100, 0).unwrap())
 }
 
 fn parse_untis_date<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
 	where D: Deserializer<'de>
 {
 	let d = u32::deserialize(deserializer)?;
-	Ok(NaiveDate::from_ymd(d as i32 / 10000 , d / 100 % 100, d % 100))
+	Ok(NaiveDate::from_ymd_opt(d as i32 / 10000 , d / 100 % 100, d % 100).unwrap())
 }
 
 fn parse_subids<'de, D>(deserializer: D) -> Result<Vec<u32>, D::Error>

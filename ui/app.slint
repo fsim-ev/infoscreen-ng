@@ -1,4 +1,4 @@
-import { Date as DatePanel, Time as TimePanel, StatusPanel }
+import { Date as DatePanel, Time as TimePanel, StatusPanel, State as TimeState }
 	from "shared.slint";
 
 import { TimeBlock, TimeBlockPanel, State }
@@ -7,41 +7,51 @@ import { TimeBlock, TimeBlockPanel, State }
 import { Headline, NewsPanel }
 	from "news.slint";
 
-export { State }
+export { State, TimeState }
 
-global Language := {
-	property <string> title-regular: "Stundenplan";
-	property <string> title-exam: "Prüfungsplan";
+global Language  {
+	in property <string> title-regular: "Stundenplan";
+	in property <string> title-exam: "Prüfungsplan";
 	
-	property <string> lesson-break: "Vorlesungsfrei\n¯\\_(ツ)_/¯";
+	in property <string> lesson-break: "Vorlesungsfrei\n¯\\_(ツ)_/¯";
 	
-	property <string> timeoff-regular: "Feierabend!";
-	property <string> timeoff-exam: "Einfach morgen weiter lernen...";
+	in property <string> timeoff-regular: "Feierabend!";
+	in property <string> timeoff-exam: "Einfach morgen weiter lernen...";
+	in property <string> timeoff-exam-end: "Erlösung in {} Tagen...";
 }
 
-export struct Headline := {
+export struct Event {
+	logo: image,
+	timestamp: int,
+}
+
+export struct Headline  {
 	title: string,
 	date: string,
 	time: string,
 }
 
-export App := Window {
-	property <string> date <=> date.date;
-	property <string> time <=> time.time;
-	property <int> secs <=> time.secs;
+export component App inherits Window {
+	in property <string> timetable_status;
+	in property <string> headlines_status;
 
-	property <string> timetable_status;
-	property <string> headlines_status;
+	in property <bool> loading: true;
+	in property <bool> time-off: false;
+	in property <int> exam-time-left: 0;
+	in property <string> exam-time-left-str;
 
-	property <bool> loading: true;
-	property <bool> time-off: false;
-	property <int> exam-days-left: 0;
-	property <bool> exam-phase: exam-days-left > 0;
+	private property <bool> exam-phase: root.exam-time-left > 0;
+	private property <bool> lecture-break: root.time-blocks.length == 0;
+	private property <bool> no-lectures: root.time-off || lecture-break;
 
-	property <[TimeBlock]> time_blocks;
-	property <[Headline]> headlines;
+	in property <[TimeBlock]> time_blocks;
+	in property <[Headline]> headlines;
+	in property <[Event]> events: [
+		{ logo: @image-url("ozora.png"), timestamp: 12000000000 },
+		{ logo: @image-url("campus-ev.png"), timestamp: 12000000000 }
+	];
 
-	title: exam-phase ? Language.title-exam : Language.title-regular;
+	title: root.exam-phase ? Language.title-exam : Language.title-regular;
 	background: #272b30;
 	default-font-family: "Noto Sans";
 	default-font-size: 32px;
@@ -49,115 +59,176 @@ export App := Window {
 	min-width: 300px;
 	max-width: 10000px;
 
-	// Background
-	if loading : Text {
-		text: "Loading...";
-		font-size: 102pt;
-		color: #FFFFFF33;
-		x: (parent.width - width) * 50%;
-		y: (parent.height - height) * 50%;
-		z: -1;
-	}
 	VerticalLayout {
 		alignment: start;
 		padding-left: 10px;
 		padding-right: 10px;
 
-		VerticalLayout {
-			HorizontalLayout {
-				alignment: space-between;
-				spacing: 4px;
+		HorizontalLayout {
+			alignment: space-between;
+			spacing: 4px;
 
-				time := TimePanel {}
-				Text {
-					text: title;
-					color: root.exam-phase ? #FAA : #FFF;
-					font-size: 30pt;
-					font-weight: 700;
+			time := TimePanel {}
+			Text {
+				text: root.title;
+				color: root.exam-phase ? #f66 : #FFF;
+				font-size: 30pt;
+				font-weight: 700;
 
-					horizontal-alignment: center;
-				}
-				date := DatePanel {}
+				horizontal-alignment: center;
 			}
-			StatusPanel { message: root.timetable_status; }
+			date := DatePanel {}
 		}
+
 		Rectangle { height: 2px; background: #32383e;}
+		StatusPanel { message: root.timetable_status; }
 
 		lecture-box := VerticalLayout {
-			if !root.time-off : Flickable {
-				interactive: true;
+			if !root.time-off :
+				Flickable {
+					z: 10;
 
-				VerticalLayout {
-					alignment: start;
-					spacing: 5px;
+					VerticalLayout {
+						alignment: start;
+						spacing: 5px;
 
-					for block[idx] in root.time_blocks : VerticalLayout {
-						cache-rendering-hint: true;
+						for block[idx] in root.time_blocks : VerticalLayout {
+							property <bool> is_first: idx == 0;
+							cache-rendering-hint: true;
 
-						if block.date != "" && idx != 0 : VerticalLayout {
-							padding-top: 4px;
-							padding-bottom: 8px;
-							Rectangle { height: 1px; background: #3e444c.brighter(100%); }
+							if block.date != "" && !self.is_first : VerticalLayout {
+								padding-top: 4px;
+								padding-bottom: 8px;
+								Rectangle { height: 1px; background: #3e444c.brighter(100%); }
+							}
+							TimeBlockPanel {
+								data: block;
+								highlight: false; // root.exam-phase && is_first;
+							}
 						}
-						TimeBlockPanel { data: block; }
 					}
 				}
-			}
 		}
 
-		if !root.loading && root.time-off && root.time-blocks.length > 0 : VerticalLayout {
-			alignment: center;
-			height: root.height - headline-box.height;
 
-			Text {
-				text: root.exam-phase ? Language.timeoff-exam : Language.timeoff-regular;
-				font-size: 80pt;
+		if root.no-lectures : Rectangle {
+			//border-color: #55f; border-width: 3px;
+			width: 100%;
+			height: 100%;
+			VerticalLayout {
+				alignment: space-around;
 
-				color: #fa5;
-				wrap: word-wrap;
-				vertical-alignment: center;
-				horizontal-alignment: center;
-			}
-			if root.exam-phase : Text {
-				text: "(Erlösung in " + root.exam-days-left + " Tagen)";
-				font-size: 30pt;
+				if root.loading : Text {
+					text: "Loading...";
+					font-size: 102pt;
+					color: #FFFFFF33;
 
-				color: #FFFFFF88;
-				wrap: word-wrap;
-				vertical-alignment: center;
-				horizontal-alignment: center;
-			}
-		}
-		if !root.loading && root.time-blocks.length == 0 : VerticalLayout {
-			alignment: center;
-			height: root.height - headline-box.height;
+					horizontal-alignment: center;
+					vertical-alignment: center;
+				}
 
-			Text {
-				text: Language.lesson-break;
-				font-size: 80pt;
+				if root.time-off && !root.lecture-break:
+					VerticalLayout {
+						alignment: center;
 
-				color: #fa5;
-				wrap: word-wrap;
-				vertical-alignment: center;
-				horizontal-alignment: center;
+						Text {
+							text: root.exam-phase ? Language.timeoff-exam : Language.timeoff-regular;
+							font-size: 80pt;
+
+							color: #fa5;
+							wrap: word-wrap;
+							vertical-alignment: center;
+							horizontal-alignment: center;
+						}
+						if root.exam-phase : VerticalLayout {
+							alignment: space-between;
+							spacing: 120px;
+
+							Text {
+								text: "(Erlösung in "+ root.exam-time-left-str +" Tagen)";
+								font-size: 30pt;
+
+								color: #FFFFFF88;
+								wrap: word-wrap;
+								vertical-alignment: center;
+								horizontal-alignment: center;
+							}
+							Text {
+								text: "\"Kann nicht, muss weiter lernen\"";
+								font-size: 40pt;
+
+								color: #fa5;
+								wrap: word-wrap;
+								vertical-alignment: center;
+								horizontal-alignment: center;
+							}
+						}
+					}
+				if !root.loading && root.lecture-break :
+					VerticalLayout {
+						alignment: center;
+
+						Text {
+							text: Language.lesson-break;
+							font-size: 80pt;
+
+							color: #fa5;
+							wrap: word-wrap;
+							vertical-alignment: center;
+							horizontal-alignment: center;
+						}
+					}
+
+				HorizontalLayout {
+					alignment: space-around;
+
+					for event in root.events : Rectangle {
+						in property <float> time-left: TimeState.dur-in-days(TimeState.time - event.timestamp);
+
+						// until 12 h later
+//						if time-left < 1.0 : 
+							VerticalLayout {
+								alignment: end;
+								spacing: 1rem;
+
+								HorizontalLayout {
+									alignment: center;
+									Image {
+										source: event.logo;
+										colorize: #888;
+										width: 5rem;
+									}
+								}
+								Text {
+									text: TimeState.fmt-float(time-left, 6);
+									font-size: 1.1rem;
+
+									color: #888;
+									wrap: word-wrap;
+									vertical-alignment: center;
+									horizontal-alignment: center;
+								}
+							}
+					}
+				}
 			}
 		}
 	}
 
 	headline-box := VerticalLayout {
-		height: 56px * min(headlines.length, 4);
+		height: 56px * min(root.headlines.length, 4);
 		padding: 7px;
-		y: parent.height - height;
+		y: parent.height - self.height;
 		z: 1;
 
 		StatusPanel { message: root.headlines_status; }
-		NewsPanel { data: headlines; }
+		NewsPanel { data: root.headlines; }
 	}
 	if lecture-box.height > 0 : Rectangle {
 		height: 150px;
 		width: lecture-box.width;
 		x: lecture-box.x;
-		y: headline-box.y - height * 95%;
+		y: headline-box.y - self.height * 95%;
 		background: @linear-gradient(0deg, #272b30FF 0%, #272b30FF 5%,#272b3000 100%);
 	}
 	Rectangle {

@@ -1,13 +1,13 @@
 use std::{
 	sync::{Arc, Once},
 	collections::{BTreeSet, HashMap},
-	thread, time, path::PathBuf,
+	thread, time, path::PathBuf, ops::Deref,
 };
 
 use clap::Parser;
 use slint::{self,
 	ComponentHandle, Weak,
-	VecModel,
+	Model, VecModel,
 	Color, SharedString,
 };
 
@@ -36,7 +36,7 @@ mod ui {
 	slint::include_modules!();
 }
 
-#[derive(Parser, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default,  Parser, Deserialize, Serialize)]
 #[clap(about, version)]
 struct Options
 {
@@ -52,6 +52,9 @@ struct Options
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Config {
+	#[serde(skip)]
+	path: PathBuf,
+
 	day_offset: i16,
 	time_off: TimeRange,
 
@@ -60,15 +63,19 @@ struct Config {
 
 	course_colors: ColorSet,
 	location_colors: ColorSet,
+
+	event: Vec<EventSpec>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct TimeRange {
-	start: u32,
-	end: u32,
+	#[serde(deserialize_with="parse_naive_time")]
+	start: NaiveTime,
+	#[serde(deserialize_with="parse_naive_time")]
+	end: NaiveTime,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct UntisConfig {
 	school: String,
 	auth: Auth,
@@ -87,7 +94,7 @@ impl Default for UntisConfig {
 	}
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct Auth {
 	username: String,
 	password: String,
@@ -99,11 +106,23 @@ struct ColorSet {
 	map: HashMap<String, u32>,
 }
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct EventSpec {
+	logo: PathBuf,
+	#[serde(deserialize_with="parse_naive_datetime")]
+	datetime: NaiveDateTime,
+}
+
 impl Default for Config {
 	fn default() -> Self {
 		Self {
+			path: "./config.toml".into(),
+			
 			day_offset: 0,
-			time_off: TimeRange { start: 1900, end: 0300 },
+			time_off: TimeRange { 
+				start: NaiveTime::from_hms_opt(19, 00, 00).unwrap(),
+				end: NaiveTime::from_hms_opt(03, 00, 00).unwrap() 
+			},
 
 			untis: Default::default(),
 			newsfeed_url: Default::default(),
@@ -117,23 +136,55 @@ impl Default for Config {
             	default: 0xFF_666666,
 				map: Default::default(),
 			},
+
+			event: Default::default(),
 		}
 	}
 }
 
 
+fn parse_naive_time<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let s = String::deserialize(deserializer)?;
+	let (t, _) = NaiveTime::parse_and_remainder(&s, "%H:%M")
+		.map_err(serde::de::Error::custom)?;
+
+	Ok(t)
+}
+
+fn parse_naive_datetime<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let s = String::deserialize(deserializer)?;
+	let (t, _) = NaiveDateTime::parse_and_remainder(&s, "%Y-%m-%d %H:%M")
+		.map_err(serde::de::Error::custom)?;
+
+	Ok(t)
+}
+
+
+
 fn main() -> Result<(), Box<dyn std::error::Error>>
 {
-	let opts = Options::parse();
+	let mut opts = Options::parse();
 	let xdg_dirs = xdg::BaseDirectories::with_prefix("infoscreen")?;
+
+	if !opts.config_path.exists() {
+		opts.config_path = xdg_dirs.get_config_file("timetable.toml")
+	};
 
 	let fig = Figment::new()
 		.merge(Serialized::defaults(Config::default()))
-	    .merge(Toml::file(&xdg_dirs.get_config_file("timetable.toml")))
 	    .merge(Toml::file(&opts.config_path))
-	    .merge(Serialized::defaults(opts));
+	    .merge(Serialized::defaults(opts.clone()));
 
-	let config: Config = fig.extract()?;
+	let mut config: Config = fig.extract()?;
+	config.path = opts.config_path.parent()
+		.unwrap_or(&opts.config_path)
+		.to_owned();
 
 	tracing_subscriber::fmt()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env()
@@ -145,15 +196,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 		.compact()
 		.init();
 
-	fig.metadata().for_each(|md| {
-		if let Some(src) = md.source.as_ref() {
-			log::debug!("using config from {} - {}", md.name, src);
-		}
-	});
 
+	log::debug!("using config from {}", opts.config_path.display());
 	log::debug!("config: {:?}", &config);
 
-	let ui = ui::App::new();
+	let ui = ui::App::new()?;
+
+	let time_ticker = slint::Timer::default();
+	time_ticker.start(slint::TimerMode::Repeated, time::Duration::from_millis(200), {
+		let ui = ui.clone_strong();
+		move || ui.global::<ui::TimeState>().set_time(Utc::now().timestamp() as _)
+	});
+
+	ui.show()
+		.context("failed to create window")?;
+
 	let io_task_run = CancellationToken::new();
 	let io_task_handle = thread::Builder::new()
 		.name("io-runtime".into())
@@ -168,6 +225,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 		.spawn({
 			let ui = ui.as_weak();
 			move || {
+				log::debug!("awaiting IO task to finish");
 				if let Err(panic) = io_task_handle.join()
 				{
 					let err_str = panic_description(panic);
@@ -177,13 +235,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>>
 						ui.set_timetable_status(err_str.into());
 					}).ok();
 					thread::sleep(time::Duration::from_secs(10));
+				} else {
+					log::error!("failed to join IO thread");
 				}
 				slint::invoke_from_event_loop(move || { slint::quit_event_loop().ok(); }).ok();
 			}
 		})?;
 
-	ui.run();
-	log::debug!("UI task shutting down...");
+	if let Err(err) = ui.run() {
+		log::error!(err=%err, "failed to start UI task...");
+	} else {
+		log::debug!("UI task shutting down...");
+	}
 	io_task_run.cancel();
 	cleanup_task_handle.join().expect("failed to join cleanup task");
 
@@ -239,196 +302,330 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 		location_default: Color::from_argb_encoded(conf.location_colors.default),
 	};
 
+	ui.upgrade_in_event_loop(move |ui| {
+		let events: Vec<_> = conf.event.into_iter()
+			.filter_map(|e| Some(ui::Event {
+				logo: slint::Image::load_from_path(&conf.path.join(&e.logo))
+					.inspect_err(|err| log::error!("failed to load image '{}': {}", e.logo.display(), err))
+					.ok()?,
+				timestamp: e.datetime.and_utc().timestamp() as _,
+			}))
+			.collect();	
 
-	let time_task = spawn({
-		let ui = ui.clone();
-		async move {
-			let old_ts = Local::now() - Duration::days(1) - Duration::minutes(1);
-			let mut old_date = old_ts.date();
-			let mut old_time = old_ts.time();
-			loop {
-				let now = Local::now() + Duration::days(conf.day_offset as _);
-				let new_time = if now.time().minute() != old_time.minute() {
-					let time = now.time();
-					let time_str = time.format("%H:%M").to_string();
-					old_time = time;
-					Some(time_str)
-				} else {
-					None
-				};
-				let new_date = if now.date() != old_date {
-					let date = now.date();
+		log::info!("loaded {} events", events.len());
+		ui.set_events(VecModel::from_slice(&events));
+
+		fn sec_to_dt(sec: i32) -> Option<DateTime<Local>> {
+			chrono::Utc.timestamp_opt(sec as _, 0)
+				.single()
+				.map(|dt| dt.with_timezone(&Local))
+		}
+
+		let state = ui.global::<ui::TimeState>();
+		state.on_fmt_float(|f, i| format!("{0:.1$}", f, i as _).into());
+		state.on_fmt_time(|sec|
+			sec_to_dt(sec)
+				.map(|dt| dt.format_localized("%H:%M", locale()).to_string())
+				.unwrap_or_default()
+				.into()
+		);
+		state.on_fmt_date(|sec|
+			sec_to_dt(sec)
+				.map(|dt| {
+					let dt = dt.date_naive();
 					// Remind about new year
-					let date_fmt = if date.month() == 1 { "%A, %e. %B %Y" } else { "%A, %e. %B" };
-					let date_str = date.format_localized(date_fmt, locale()).to_string();
-					old_date = date;
-					Some(date_str)
-				} else {
-					None
-				};
+					let date_fmt = if dt.month() == 1 { "%A, %e. %B %Y" } else { "%A, %e. %B" };
+					dt.format_localized(date_fmt, locale()).to_string()
+				})
+				.unwrap_or_default()
+				.into()
+		);
+		state.on_is_midnight(|sec|
+			sec_to_dt(sec)
+				.map(|dt| dt.num_seconds_from_midnight() == 0)
+				.unwrap_or_default()
+		);
 
+	}).unwrap();
+
+	let exam_end = Arc::new(sync::RwLock::new(Local::now()));
+
+	let _time_task = spawn({
+		let ui = ui.clone();
+		let exam_end = exam_end.clone();
+		async move {
+			loop {
+				let sleep_til = time::Instant::now() + time::Duration::from_millis(1000);
+				let now = Local::now() + Duration::days(conf.day_offset as _);
+				let time_off = conf.time_off.start <= now.time() || now.time() < conf.time_off.end;
+				
+				let exam_end = *exam_end.read().await;
+				let exam_time_left = (exam_end - now).num_milliseconds();
 				ui.upgrade_in_event_loop(move |ui| {
-					ui.set_secs(now.second() as i32);
-					if let Some(date) = new_date {
-						ui.set_date(date.into());
+					ui.global::<ui::State>().set_day_time(now.num_seconds_from_midnight() as _);
+					ui.set_time_off(time_off);
+					if time_off {
+						if exam_time_left >= 0 {
+							ui.set_exam_time_left(exam_time_left as _);
+							ui.set_exam_time_left_str(format!("{:0.8}", exam_time_left as f32 / 1000.0 / 84600.0).into());
+						}
 					}
-					if let Some(time) = new_time {
-						ui.set_time(time.into());
-
-						let day_time = now.hour() * 100 + now.minute();
-						ui.global::<ui::State>()
-							.set_day_time(day_time as _);
-
-						ui.set_time_off(day_time >= conf.time_off.start || day_time < conf.time_off.end);
-					}
-				}).ok();
-				time::sleep(time::Duration::from_millis(500-10)).await; // Anti-Aliasing
+				}).inspect_err(log_err).ok();
+				time::sleep_until(sleep_til).await;
 			};
 		}
 	});
 
-	let timetable_updater: task::JoinHandle<Result<()>> = spawn({
+	let (tx, mut new_entries) = sync::mpsc::channel::<Vec<TimeEntry>>(4);
+
+	let ui_table_updater: task::JoinHandle<Result<()>> = spawn({
 		let ui = ui.clone();
 		async move {
-			let timetable_colors = Arc::new(timetable_colors);
-			let untis_conf = Arc::new(std::mem::take(&mut conf.untis));
+			ui.upgrade_in_event_loop(move |ui| {
+				let ui_entries: Vec<ui::TimeBlock> = Default::default();
+				ui.set_time_blocks(ui_entries.deref().into());
+			}).ok();
 
-			let mut lecture_base = None;
+			let mut entries = Vec::with_capacity(128);
+			let mut sleep_dur = time::Duration::from_secs(60);
+
 			loop {
+				match time::timeout(sleep_dur, new_entries.recv()).await {
+					Ok(Some(new_entries)) => {
+						entries.extend(new_entries);
+						entries.sort_by(|a, b| a.time_start.cmp(&b.time_start));
+
+						sleep_dur = time::Duration::from_secs(60*60);
+
+						ui.upgrade_in_event_loop(move |ui| {
+							ui.set_loading(false);
+							ui.set_timetable_status(Default::default());
+						}).ok();
+					},
+					Ok(None) => break,
+					Err(_) => {},
+				}
+
 				let now = Local::now() + Duration::days(conf.day_offset as _);
-				let mut exam_end = now;
+				log::debug!("current date: {}", now.to_rfc2822());
 
-				let (entries, exams) = {
-					log::debug!("loading exams...");
-					let mut exams = match fetch_exam_times().await {
-						Ok(v) => v,
-						Err(err) => {
-							log::error!("{:#}", err);
-							if exam_end > now {
-								ui.upgrade_in_event_loop(move |ui| {
-									ui.set_timetable_status(error_showable(err));
-								}).ok();
-								time::sleep(time::Duration::from_secs(30)).await;
-								continue;
-							}
-							vec![]
-						},
-					};
-					log::debug!("loaded {} exams", exams.len());
-					exams.sort_by(|a,b| a.time.cmp(&b.time));
+				entries.retain(|e| e.time_end > now);
+				if entries.is_empty() {
+					log::info!("loaded 0 entries");
+					continue;
+				}
 
-					let exam_phase = exams.first().zip(exams.last())
-						.map(|(exam_first, exam_last)| {
-							exam_end = exam_last.time + Duration::minutes(90);
-							now.date() >= exam_first.time.date() && now < exam_end
-						})
-						.unwrap_or(false);
+				let first_entry = entries.first().unwrap();
+				let is_exam_phase = first_entry.is_exam;
 
-					if exam_phase {
-						let last_exam_day = exams.last().unwrap().time.date();
-						ui.upgrade_in_event_loop(move |ui|
-							ui.set_exam_days_left((last_exam_day - now.date()).num_days() as _)
-						).ok();
-						(exams, true)
-					} else if let Some(untis_conf) = untis_conf.as_ref() {
-						log::debug!("loading lectures...");
+				let first_time = first_entry.time_start.to_rfc2822();
+				let last_time = entries.last().unwrap().time_start.to_rfc2822();
+				log::debug!("loaded {} entries (first: {}, last: {})", entries.len(), first_time, last_time);
 
-						let untis_conf = untis_conf.clone();
-						let session = untis::Session::create(
-							&untis_conf.school,
-							untis_conf.auth.username.clone().into(),
-							untis_conf.auth.password.clone().into())
-							.await
-							.context("failed to create Untis session")?;
 
-						if lecture_base.is_none() {
-							log::debug!("loading lecture base data...");
-							lecture_base = match fetch_lecture_base_data(&session, &untis_conf.faculty).await {
-								Ok(v) => Some(v),
-								Err(err) => {
-									let err = anyhow::format_err!("failed to load lecture base data: {err}");
-									log::error!("{:#}", err);
-									ui.upgrade_in_event_loop(move |ui| {
-										ui.set_timetable_status(error_showable(err));
-									}).ok();
-									time::sleep(time::Duration::from_secs(30)).await;
-									continue;
-								},
-							};
-						}
-						log::debug!("loading lecture timetable...");
-						let lectures = match fetch_lecture_times(&session, lecture_base.as_ref().unwrap(), &untis_conf, conf.day_offset).await {
-							Ok(v) => v,
-							Err(err) => {
-								let err = anyhow::format_err!("failed to load lecture timetable: {err}");
-								log::error!("{:#}", err);
-								ui.upgrade_in_event_loop(move |ui| {
-									ui.set_timetable_status(error_showable(err));
-								}).ok();
-								lecture_base = None;
-								time::sleep(time::Duration::from_secs(30)).await;
-								continue;
-							},
-						};
-						log::debug!("loaded {} lectures", lectures.len());
-						(lectures, false)
-					} else {
-						Default::default()
-					}
-				};
-
-				log::info!("loaded {} entries", entries.len());
-
-				let entry_time_offset = if exams { Duration::minutes(90) } else { Duration::minutes(30) };
 				let mut time_blocks: std::collections::BTreeMap<_, Vec<TimeEntry>> = Default::default();
-				for entry in entries
+				for entry in entries.iter()
 				{
-					if entry.time + entry_time_offset < now {
+					let skip_after = if is_exam_phase {
+						entry.time_end
+					} else {
+						entry.time_start + Duration::minutes(30)
+					};
+
+					if skip_after < now {
 						continue;
 					}
-					time_blocks.entry(entry.time).or_default().push(entry);
+					time_blocks.entry(entry.time_start)
+						.or_default()
+						.push(entry.clone());
 				}
-				time_blocks.values_mut().for_each(|entries|
-					entries.sort_by(|a, b|	a.abbr.cmp(&b.abbr))
-				);
-				let next_update = time_blocks.iter()
-					.find_map(|(&time, _)| (time > now).then(|| time - now + Duration::minutes(30)))
-					.unwrap_or(Duration::hours(2));
 
+				time_blocks.values_mut().for_each(|entries|
+					entries.sort_by(|a, b| a.abbr.cmp(&b.abbr))
+				);
+
+				//if let Some(dur) = time_blocks.iter().nth(1)
+				//		.and_then(|(&time_start, _)| (time_start - now).to_std().ok()) {
+				//	sleep_dur = dur;
+				//}
+	
 				let timetable_colors = timetable_colors.clone();
 				ui.upgrade_in_event_loop(move |ui| {
-					ui.set_loading(false);
-					ui.set_timetable_status(Default::default());
-					let now = Local::now();
 					let mut dated = None;
 					let ui_blocks: Vec<ui::TimeBlock> = time_blocks.into_iter()
 						.map(|(time, entries)| {
-							let date = (now.date() != time.date() && (dated.is_none() || dated.unwrap() != time.date())).then(|| {
-									let date = time.date();
+							let date = (now.date_naive() != time.date_naive() && (dated.is_none() || dated.unwrap() != time.date_naive()))
+								.then(|| {
+									let date = time.date_naive();
 									dated = Some(date);
 									date.format_localized("%A, %e. %B", locale()).to_string().into()
 								})
 								.unwrap_or_default();
 
-							let ui_entries: Vec<_> = entries.into_iter()
+							let ui_entries_: Vec<_> = entries.into_iter()
 								.map(|entry| entry.into_ui(&timetable_colors))
 								.collect();
+
 							ui::TimeBlock {
 								date,
 								time: time.format("%H:%M").to_string().into(),
-								entries: VecModel::from_slice(&ui_entries),
+								entries: ui_entries_.deref().into(),
 								..Default::default()
 							}
 						})
 						.collect();
 
-					ui.set_time_blocks(VecModel::from_slice(&ui_blocks));
-				}).ok();
-				log::info!("next time table update at {} (in {} min)", now + Duration::from(next_update), next_update.num_minutes());
-				time::sleep(next_update.to_std().expect("update sleep is negative").into()).await;
+					let model_rc = ui.get_time_blocks();
+					let model = model_rc.as_any()
+						.downcast_ref::<VecModel<ui::TimeBlock>>()
+						.expect("unexpected ui model");
+						
+					model.set_vec(ui_blocks);
+				}).inspect_err(log_err).ok();
+
+			}
+			Ok(())
+		}
+	});
+
+	let exam_updater: task::JoinHandle<Result<()>> = spawn({
+		let ui = ui.clone();
+		let tx = tx.clone();
+		async move {
+			let mut sleep_dur = time::Duration::ZERO;
+			let mut is_exam_phase = false;
+
+			loop {
+				if !sleep_dur.is_zero() {
+					let now = Local::now() + Duration::days(conf.day_offset as _);
+					let dur = Duration::from_std(sleep_dur).unwrap();
+					log::info!("next exam table update at {} (in {} min)", (now + dur).to_rfc2822(), dur.num_minutes());
+				}
+				time::sleep(sleep_dur).await;
+				sleep_dur = time::Duration::from_secs(3*60*60);
+
+				let now = Local::now() + Duration::days(conf.day_offset as _);
+				log::debug!("current date: {}", now.to_rfc2822());
+
+				log::debug!("loading exams...");
+				let mut entries = match fetch_exam_times().await {
+					Ok(v) => v,
+					Err(err) => {
+						log::error!("{:#}", err);
+						if is_exam_phase {
+							ui.upgrade_in_event_loop(move |ui| {
+								ui.set_timetable_status(error_showable(err));
+							}).ok();
+							sleep_dur = time::Duration::from_secs(30);
+							continue;
+						}
+						vec![]
+					},
+				};
+				log::debug!("loaded {} exams", entries.len());
+				if entries.is_empty() {
+					continue;
+				}
+
+				entries.sort_by(|a,b| a.time_end.cmp(&b.time_end));
+
+				if let Some((start, end)) = entries.first().zip(entries.last()) {
+					is_exam_phase = start.time_start <= now && now < end.time_end;
+					let exam_end_time = end.time_end.clone();
+					let mut ee = exam_end.write().await;
+					*ee = exam_end_time;
+					if let Ok(dur) = (exam_end_time - now).to_std() {
+						sleep_dur = dur;
+					}	
+				}
+				tx.send(entries).await.ok();
 			}
 		}
 	});
+
+	if let Some(untis_conf) = conf.untis.clone() {
+		let task: task::JoinHandle<Result<()>> = spawn({
+			let ui = ui.clone();
+			let tx = tx.clone();
+			let untis_conf = untis_conf.clone();
+			async move {
+
+				let mut sleep_dur = time::Duration::ZERO;
+				let mut lecture_base = None;
+
+				loop {
+					if !sleep_dur.is_zero() {
+						let now = Local::now() + Duration::days(conf.day_offset as _);
+						let dur = Duration::from_std(sleep_dur).unwrap();
+						log::info!("next lecture table update at {} (in {} min)", (now + dur).to_rfc2822(), dur.num_minutes());
+					}
+					time::sleep(sleep_dur).await;
+					sleep_dur = time::Duration::from_secs(2*60*60);
+
+					let now = Local::now() + Duration::days(conf.day_offset as _);
+
+					log::debug!("loading lectures...");
+
+					let untis_conf = untis_conf.clone();
+					let session = untis::Session::create(
+							&untis_conf.school,
+							untis_conf.auth.username.clone().into(),
+							untis_conf.auth.password.clone().into(),
+						)
+						.await
+						.context("failed to create Untis session")?;
+
+					if lecture_base.is_none() {
+						log::debug!("loading lecture base data...");
+						lecture_base = match fetch_lecture_base_data(&session, &untis_conf.faculty).await {
+							Ok(v) => Some(v),
+							Err(err) => {
+								let err = anyhow::format_err!("failed to load lecture base data: {err}");
+								log::error!("{:#}", err);
+								ui.upgrade_in_event_loop(move |ui| {
+									ui.set_timetable_status(error_showable(err));
+								}).ok();
+								sleep_dur = time::Duration::from_secs(30);
+								continue;
+							},
+						};
+					}
+					log::debug!("loading lecture timetable...");
+					let entries = match fetch_lecture_times(&session, lecture_base.as_ref().unwrap(), &untis_conf, conf.day_offset).await {
+						Ok(v) => v,
+						Err(err) => {
+							let err = anyhow::format_err!("failed to load lecture timetable: {err}");
+							log::error!("{:#}", err);
+							ui.upgrade_in_event_loop(move |ui| {
+								ui.set_timetable_status(error_showable(err));
+							}).ok();
+							lecture_base = None;
+							sleep_dur = time::Duration::from_secs(30);
+							continue;
+						},
+					};
+					log::debug!("loaded {} lectures", entries.len());
+					if let Some(dur) = entries.iter()
+							.max_by(|&a, &b| a.time_start.cmp(&b.time_start))
+							.and_then(|entry| (entry.time_end - now).to_std().ok()) {
+						sleep_dur = dur;
+					}
+					tx.send(entries).await.ok();
+				}
+			}
+		});
+		if let Err(err) = task.await {
+			let err = if err.is_panic() {
+				panic_description(err.into_panic())
+			} else {
+				err.to_string()
+			};
+			let err = anyhow::format_err!("failed to update lectures: {}", err);
+			ui.upgrade_in_event_loop(move |ui| {
+				ui.set_timetable_status(error_showable(err));
+			}).ok();
+		}
+	};
 
 	if let Some(newsfeed_url) = conf.newsfeed_url {
 		let task: task::JoinHandle<Result<()>> = spawn({
@@ -437,12 +634,13 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 			let request = client.get(newsfeed_url).build()?;
 			async move {
 				loop {
-					log::debug!("Loading headlines from {} ...", request.url().as_str());
+					log::debug!("loading headlines from {} ...", request.url().as_str());
 					ui.upgrade_in_event_loop(move |ui| {
 						ui.set_headlines_status("Loading...".into());
 					}).ok();
 					let request = request.try_clone()
 						.context("failed to clone request")?;
+
 					let response = client.execute(request)
 						.and_then(http::Response::bytes)
 						.await
@@ -468,14 +666,14 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 									.map(Into::into)
 									.collect();
 								ui.set_headlines(VecModel::from_slice(&ui_headlines));
-							}).ok();
+							}).inspect_err(log_err).ok();
 							time::sleep(time::Duration::from_secs(3600)).await;
 						},
 						Err(err) => {
 							log::error!("{:#}", err);
 							ui.upgrade_in_event_loop(move |ui| {
 								ui.set_headlines_status(error_showable(err));
-							}).ok();
+							}).inspect_err(log_err).ok();
 							time::sleep(time::Duration::from_secs(10)).await;
 						},
 					}
@@ -497,13 +695,25 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 
 
 	tokio::select!{
-		res = timetable_updater => if let Err(err) = res {
+		res = ui_table_updater => if let Err(err) = res {
 			let err = if err.is_panic() {
 				panic_description(err.into_panic())
 			} else {
 				err.to_string()
 			};
-			let err = anyhow::format_err!("failed to update lectures: {}", err);
+			let err = anyhow::format_err!("failed to update table: {}", err);
+			log::error!("{}", err);
+			ui.upgrade_in_event_loop(move |ui| {
+				ui.set_timetable_status(error_showable(err));
+			}).ok();
+		},
+		res = exam_updater => if let Err(err) = res {
+			let err = if err.is_panic() {
+				panic_description(err.into_panic())
+			} else {
+				err.to_string()
+			};
+			let err = anyhow::format_err!("failed to update exams: {}", err);
 			log::error!("{}", err);
 			ui.upgrade_in_event_loop(move |ui| {
 				ui.set_timetable_status(error_showable(err));
@@ -512,12 +722,18 @@ async fn io_run(ui: Weak<ui::App>, mut conf: Config, run_token: CancellationToke
 		_ = tokio::signal::ctrl_c() => {
 			log::debug!("SIGINT detected!");
 		},
-		_ = time_task => {},
 		_ = run_token.cancelled() => {},
 	};
 
 	log::debug!("IO task shutting down...");
 	Ok(())
+}
+
+fn log_err<E>(err: &E)
+where
+	E: std::fmt::Display
+{
+	log::warn!("failed to update UI: {err}");
 }
 
 fn error_showable(err: anyhow::Error) -> SharedString {
@@ -541,10 +757,13 @@ fn locale() -> chrono::Locale {
 	unsafe {
 		LOCALE_INIT.call_once(|| {
 			match sys_locale::get_locale()
-				.and_then(|locstr| chrono::Locale::try_from(locstr.as_str()).ok())
+				.ok_or("detect system locale".to_owned())
+				.and_then(|locstr| chrono::Locale::try_from(locstr.replace('-', "_").as_str())
+					.map_err(|_err| format!("parse system locale '{locstr}'"))
+				)
 			{
-				Some(loc) => LOCALE = loc,
-				None => log::error!("failed to get system locale"),
+				Ok(loc) => LOCALE = loc,
+				Err(err) => log::error!("failed to {err}"),
 			}
 		});
 		LOCALE
@@ -572,11 +791,13 @@ impl Into<ui::Headline> for Headline {
 //###########
 #[derive(Debug, Clone)]
 pub struct TimeEntry {
-	title: SharedString,
-	abbr: SharedString,
-	time: DateTime<Local>,
-	locations: BTreeSet<SharedString>,
-	courses: BTreeSet<SharedString>,
+	title: String,
+	abbr: String,
+	time_start: DateTime<Local>,
+	time_end: DateTime<Local>,
+	locations: BTreeSet<String>,
+	courses: BTreeSet<String>,
+	is_exam: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -612,13 +833,14 @@ impl TimeEntry {
 					.find(|(rgx, _color)| rgx.is_match(&title))
 					.map(|(_, color)| color.clone())
 					.unwrap_or_else(|| colors.course_default),
-				title,
+				title: title.into(),
 			})
 			.collect();
 
 		ui::Entry {
-			title: self.title,
-			abbr: self.abbr,
+			title: self.title.into(),
+			abbr: self.abbr.into(),
+			is_exam: self.is_exam,
 			lecturers: "".into(), // TODO: self.lecturers.join(",").into(),
 			locations: VecModel::from_slice(&locations),
 			courses: VecModel::from_slice(&courses),
@@ -666,7 +888,7 @@ async fn fetch_lecture_base_data(session: &untis::Session, faculty: &str) -> Res
 
 async fn fetch_lecture_times(session: &untis::Session, data: &UntisData, conf: &UntisConfig, day_offset: i16) -> Result<Vec<TimeEntry>>
 {
-	let today = Local::today() + Duration::days(day_offset as _);
+	let today = Local::now().date_naive() + Duration::days(day_offset as _);
 	let tomorrow = today + Duration::days(conf.day_range as _);
 
 	// let terms = session.school_years().await?; // TODO: fix fetch error during semester overlap
@@ -675,7 +897,7 @@ async fn fetch_lecture_times(session: &untis::Session, data: &UntisData, conf: &
 	let mut lectures: HashMap<u32, TimeEntry> = Default::default();
 	for class in data.classes.values() {
 		log::debug!("loading timetable for {}...", class.name);
-		let class_lectures = session.timetable(untis::TimetableType::Class, class.id, today.naive_local(), tomorrow.naive_local()).await?;
+		let class_lectures = session.timetable(untis::TimetableType::Class, class.id, today, tomorrow).await?;
 		for lecture in class_lectures {
 			let subject = match lecture.subject_ids.first() {
 				Some(id) => data.subjects.get(&id).unwrap(),
@@ -685,15 +907,20 @@ async fn fetch_lecture_times(session: &untis::Session, data: &UntisData, conf: &
 				.filter_map(|id| data.rooms.get(&id).map(|r| r.name.clone().into()))
 				.collect();
 
-			let time = Local.from_local_datetime(&lecture.date.and_time(lecture.start_time))
+			let time_start = Local.from_local_datetime(&lecture.date.and_time(lecture.start_time))
 				.latest()
-				.context("failed to convert lecture time")?;
+				.context("failed to convert lecture start time")?;
+
+			let time_end = Local.from_local_datetime(&lecture.date.and_time(lecture.end_time))
+				.latest()
+				.context("failed to convert lecture end time")?;
 
 			let l = lectures.entry(lecture.id)
 				.or_insert(TimeEntry {
 					title: subject.long_name.clone().into(),
-					abbr: subject.name.trim_start_matches(&faculty_prefix).clone().into(),
-					time,
+					abbr: subject.name.trim_start_matches(&faculty_prefix).into(),
+					is_exam: false,
+					time_start, time_end,
 					locations: Default::default(),
 					courses: Default::default(),
 				});
@@ -702,7 +929,7 @@ async fn fetch_lecture_times(session: &untis::Session, data: &UntisData, conf: &
 			l.locations.extend(rooms);
 		}
 	}
-	Ok(lectures.into_iter().map(|(_, lecture)| lecture).collect())
+	Ok(lectures.into_values().collect())
 }
 
 async fn fetch_exam_times() -> Result<Vec<TimeEntry>> {

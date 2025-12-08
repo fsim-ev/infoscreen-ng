@@ -10,7 +10,7 @@ export global State  {
 	// Dev helpers
 	fmt-float(f, i) => { return Math.round(f * pow(10, i)) / pow(10, i) + "."; }
 	fmt-time(time) => { return "13:37"; }
-	fmt-date(date) => { return "24.07"; }
+	fmt-date(date) => { return "Someday, 24.07"; }
 	dur-in-days(dur) => {
 	    return dur/86400.0;
 	}
@@ -29,19 +29,22 @@ export global State  {
 }
 
 
-export component Date inherits Text {
-	text: State.fmt-date(State.time);
-	color: #FFF;
-	font-size: 1.1rem;
-	font-weight: 600;
+export component Date inherits HorizontalLayout {
+	alignment: start;
+	Text {
+		text: State.fmt-date(State.time);
+		color: #FFF;
+		font-size: 1.1rem;
+		font-weight: 600;
+	}
 }
 
 export component Time inherits HorizontalLayout {
 	in property <int> secs: mod(State.time, 60);
 
-	alignment: end;
+	alignment: start;
 	spacing: 0.3rem;
-	txt := Text {
+	Text {
 		text: State.fmt-time(State.time);
 		color: #FFF;
 		font-size: 1.1rem;
@@ -81,4 +84,3 @@ export component StatusPanel inherits Rectangle {
 		}
 	}
 }
-

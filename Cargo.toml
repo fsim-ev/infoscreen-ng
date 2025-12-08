@@ -7,49 +7,74 @@ edition = "2021"
 build = "build.rs"
 
 [workspace]
-members = ["bus-schedule"]
+members = ["bus-schedule", "todo-list"]
 
-[features]
-default = ["qt"]
-qt = ["slint/backend-qt"]
-wayland = ["slint/backend-winit-wayland"]
-x11 = ["slint/backend-winit-x11"]
-
-[build-dependencies]
-slint-build = "^0.3"
-
-[dependencies]
+[workspace.dependencies]
 # Error handling
 anyhow = "^1"
 
 # Interface
-slint = { version = "^0.3", default-features = false, features = ["std", "compat-0-3-0"] }
-clap = { version = "^4", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
+slint-build = "~1.5"
+slint = { version = "~1.5", default-features = false, features = ["std", "compat-1-2"] }
+clap = { version = "~4.5", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 
 # Config
 figment = { version = "0.10", features = ["toml"] }
 xdg = "^2.4"
-sys-locale = "^0.2.1"
+sys-locale = "^0.3"
+
+# I/O
+tokio = { version = "~1.37", features = ["io-util","macros","signal","time"] }
+reqwest = { version = "~0.12", default-features = false, features = ["json","trust-dns","rustls-tls"] }
 
 # Data
 chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
 serde = { version = "^1", features = ["derive"] }
-regex = { version = "^1.6", default-features = false, features = ["std"] }
-bytes = "^1.2"
-feed-rs = "^1"
-json-rpc-types = "^1.2"
-scraper = "^0.13"
-
-# I/O
-futures-util = "^0.3"
-tokio = { version = "^1.21", features = ["io-util","macros","signal","time"] }
-tokio-util = "^0.7"
-reqwest = { version = "^0.11", features = ["cookies","json","trust-dns"] }
 
 # Logging
 tracing = { version = "^0.1", features = ["log", "release_max_level_debug"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[features]
+default = ["qt"]
+qt = ["slint/backend-qt"]
+wayland = ["slint/backend-winit-wayland", "slint/renderer-winit-femtovg"]
+x11 = ["slint/backend-winit-x11", "slint/renderer-winit-femtovg"]
+
+[build-dependencies]
+slint-build.workspace = true
+
+[dependencies]
+# Error handling
+anyhow.workspace = true
+
+# Interface
+slint.workspace = true
+clap.workspace = true
+
+# Config
+figment.workspace = true
+xdg.workspace = true
+sys-locale.workspace = true
+
+# Data
+chrono.workspace = true
+serde.workspace = true
+regex = { version = "^1.7", default-features = false, features = ["std"] }
+bytes = "^1.4"
+feed-rs = "^1"
+json-rpc-types = "^1.2"
+scraper = "^0.15"
+
+# I/O
+futures-util = "^0.3"
+tokio.workspace = true
+tokio-util = "^0.7"
+reqwest = { workspace = true, features = ["cookies"] }
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
 [profile.release]
 lto = "thin"
-

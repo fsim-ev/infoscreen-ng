@@ -1,20 +1,24 @@
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{HashMap, HashSet, BTreeSet},
 	hash::Hash,
-	ops::Add,
+	ops::Deref,
 	path::PathBuf,
 	sync::{Arc, Once},
 	thread, time,
 };
 
 use clap::Parser;
-use slint::{self, Color, ComponentHandle, VecModel, Weak, SharedString};
+use slint::{self, 
+	ComponentHandle, Weak,
+	Model,
+	Color, VecModel, SharedString, ModelRc, 
+};
 
 use reqwest as http;
 use tokio;
 use tokio_util::sync::CancellationToken;
 
-use chrono::{prelude::*, Duration};
+use chrono::prelude::*;
 use figment::{
 	providers::{Format, Serialized, Toml},
 	Figment,
@@ -104,7 +108,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		return Err("empty bus schedule".into());
 	}
 
-	let ui = ui::App::new();
+	let ui = ui::App::new()?;
+
+	let time_ticker = slint::Timer::default();
+	time_ticker.start(slint::TimerMode::Repeated, time::Duration::from_millis(200), {
+		let ui = ui.clone_strong();
+		move || ui.global::<ui::TimeState>().set_time(Utc::now().timestamp() as _)
+	});
+
+	ui.show()
+		.context("failed to create window")?;
+	
 	let io_task_run = CancellationToken::new();
 	let io_task_handle = thread::Builder::new().name("io-runtime".into()).spawn({
 		let ui = ui.as_weak();
@@ -132,8 +146,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}
 	})?;
 
-	ui.run();
-	log::debug!("UI task shutting down...");
+	if let Err(err) = slint::run_event_loop() {
+		log::error!(err=%err, "failed to start UI task...");
+	} else {
+		log::debug!("UI task shutting down...");
+	}
 	io_task_run.cancel();
 	cleanup_task_handle
 		.join()
@@ -165,52 +182,56 @@ fn io_runtime_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken)
 	Ok(())
 }
 
-async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -> Result<()> {
+async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -> Result<()> 
+{
 	use tokio::*;
+
+	ui.upgrade_in_event_loop(move |ui| {
+
+		fn sec_to_dt(sec: i32) -> Option<DateTime<Local>> {
+			chrono::Utc.timestamp_opt(sec as _, 0)
+				.single()
+				.map(|dt| dt.with_timezone(&Local))
+		}
+
+		let state = ui.global::<ui::TimeState>();
+		state.on_fmt_float(|f, i| format!("{0:.1$}", f, i as _).into());
+		state.on_fmt_time(|sec|
+			sec_to_dt(sec)
+				.map(|dt| dt.format_localized("%H:%M", locale()).to_string())
+				.unwrap_or_default()
+				.into()
+		);
+		state.on_fmt_date(|sec|
+			sec_to_dt(sec)
+				.map(|dt| {
+					let dt = dt.date_naive();
+					// Remind about new year
+					let date_fmt = if dt.month() == 1 { "%A, %e. %B %Y" } else { "%A, %e. %B" };
+					dt.format_localized(date_fmt, locale()).to_string()
+				})
+				.unwrap_or_default()
+				.into()
+		);
+		state.on_is_midnight(|sec|
+			sec_to_dt(sec)
+				.map(|dt| dt.num_seconds_from_midnight() == 0)
+				.unwrap_or_default()
+		);
+	}).unwrap();
 
 	let time_task = spawn({
 		let ui = ui.clone();
 		async move {
-			let mut old_date = chrono::Local.timestamp(0, 0).date();
-			let mut old_time = chrono::Local.timestamp(0, 0).time();
 			loop {
 				let now = chrono::Local::now();
-				let new_time = if now.time().minute() != old_time.minute() {
-					let time = now.time();
-					let time_str = time.format("%H:%M").to_string();
-					old_time = time;
-					Some(time_str)
-				} else {
-					None
-				};
-				let new_date = if now.date() != old_date {
-					let date = now.date();
-					// Remind about new year
-					let date_fmt = if date.month() == 1 {
-						"%A, %e. %B %Y"
-					} else {
-						"%A, %e. %B"
-					};
-					let date_str = date.format_localized(date_fmt, locale()).to_string();
-					old_date = date;
-					Some(date_str)
-				} else {
-					None
-				};
-
+				
 				ui.upgrade_in_event_loop(move |ui| {
-					if let Some(date) = new_date {
-						ui.set_date(date.into());
-					}
-					if let Some(time) = new_time {
-						ui.set_time(time.into());
-						ui.global::<ui::DepartureState>()
-							.set_time((now.timestamp() / 60) as _);
-					}
-					ui.set_secs(now.second() as i32);
-				})
-				.ok();
-				time::sleep(time::Duration::from_millis(250)).await;
+					ui.global::<ui::DepartureState>()
+						.set_time((now.timestamp() / 60) as _);
+
+				}).inspect_err(log_err).ok();
+				time::sleep(time::Duration::from_secs(10)).await;
 			}
 		}
 	});
@@ -223,22 +244,21 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 				let status: SharedString = match res {
 					Ok(()) => "".into(),
 					Err(err) => {
-						let cause: String = err
-							.chain()
+						let cause: String = err.chain()
 							.skip(1)
 							.take(1)
-							.map(|err| err.to_string())
+							.map(ToString::to_string)
 							.collect::<String>()
 							.split(": ")
 							.collect::<Vec<_>>()
 							.join("\n");
+
 						format!("{}\n{}", err, cause).into()
 					}
 				};
 				ui.upgrade_in_event_loop(|ui| {
 					ui.set_status(status);
-				})
-				.ok();
+				}).inspect_err(log_err).ok();
 			}
 		}
 	});
@@ -259,10 +279,8 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 						name: stop.title.clone().into(),
 						color: Color::from_argb_encoded(stop.color),
 						distance: dist as _,
-						time_min: (dist as f32 / (conf.walk_speed.fast * 1.0 / 3.6) / 60.0).ceil()
-							as _,
-						time_max: (dist as f32 / (conf.walk_speed.normal * 1.0 / 3.6) / 60.0).ceil()
-							as _,
+						time_min: (dist as f32 / (conf.walk_speed.fast * 1.0 / 3.6) / 60.0).ceil() as _,
+						time_max: (dist as f32 / (conf.walk_speed.normal * 1.0 / 3.6) / 60.0).ceil() as _,
 					}
 				})
 				.collect();
@@ -277,21 +295,19 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 		.timeout(time::Duration::from_secs(20))
 		.pool_idle_timeout(time::Duration::from_secs((conf.update_rate + 2) as _))
 		.build()?;
+
+	let (tx, mut rx) = sync::mpsc::channel(16);
+
 	let schedule_updater = spawn({
-		let ui = ui.clone();
 		let err_chan = err_chan.clone();
 		let bus_stops = bus_stops.clone();
 		let strip = conf.strip_from_names;
 		async move {
-			let mut departures: HashMap<&str, Vec<Departure>> =
-				HashMap::with_capacity(bus_stops.len());
-
 			loop {
-				log::info!("updating bus schedules...");
-
-				let now = chrono::Local::now();
 				let mut fetch_err = false;
+				let mut dep_next = Local::now();
 
+				log::info!("updating bus schedules...");
 				for (stop_idx, (stop_id, stop)) in bus_stops.iter().enumerate() {
 					log::debug!(stop = stop_id, "  fetching schedule...");
 					let mut deps_new = match fetch_schedule(client.clone(), stop_id).await {
@@ -316,52 +332,119 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 						if let Some(stripped) = dep.line_destination.strip_prefix(&strip) {
 							dep.line_destination = stripped.trim().to_owned();
 						}
+
+						if dep_next > dep.time_sched {
+							dep_next = dep.time_sched;
+						}
 					}
 
-					let deps_old = departures.entry(&stop_id).or_default();
-					*deps_old = deps_old.iter()
-						.cloned()
-						.filter(|d| {
-							let dtime = d.time + Duration::minutes(d.delay as _);
-							dtime < deps_new.first().unwrap().time && dtime > now - Duration::minutes(2)
-						})
-						.collect();
+					let deps_new: BTreeSet<_> = deps_new.into_iter().collect();
 
-					deps_old.extend(deps_new);
+					if let Err(err) = tx.send(deps_new).await {
+						log::error!("failed to dispatch departures: {}", err);
+						continue;
+					}
 				}
 
-				log::debug!("updating UI...");
-
-				let mut departures: Vec<_> = departures.values().flatten().collect();
-				let dep_num = departures.len();
-				departures.sort_by(|a, b| {
-					a.time
-						.add(Duration::minutes(a.delay as _))
-						.cmp(&b.time.add(Duration::minutes(b.delay as _)))
-				});
-
-				let (depar_into_city, depar_from_city) = {
-					departures
-						.into_iter()
-						.partition::<Vec<_>, _>(|depart| depart.into_city)
-				};
-
-				ui.upgrade_in_event_loop(|ui| {
-					let dep: Vec<_> = depar_into_city.into_iter().map(Into::into).collect();
-					ui.set_schedule_into_city(VecModel::from_slice(&dep));
-					let dep: Vec<_> = depar_from_city.into_iter().map(Into::into).collect();
-					ui.set_schedule_from_city(VecModel::from_slice(&dep));
-				})
-				.ok();
-				log::info!("updated {dep_num} departures...");
 
 				let delay = if fetch_err {
 					time::Duration::from_secs(10)
 				} else {
-					err_chan.try_send(Ok(())).ok();
-					time::Duration::from_secs(conf.update_rate as _)
+					err_chan.try_send(Ok(())).ok(); // clear error
+
+					let threshold = chrono::Duration::minutes((conf.update_rate * 20) as _);
+					let wait = Local::now() - dep_next;
+					if wait > threshold {
+						// slow down updating if the next departures
+						time::Duration::from_secs((wait.num_seconds() / 2) as _)
+					} else {
+						time::Duration::from_secs(conf.update_rate as _)
+					}
 				};
 				time::sleep(delay).await;
+			}
+		}
+	});
+	let _ui_updater = spawn({
+		let ui = ui.clone();
+		let bus_stops = bus_stops.clone();
+		let _err_chan = err_chan.clone();
+		async move {
+
+			ui.upgrade_in_event_loop(move |ui| {
+				// prime type id for later
+				ui.set_schedule_into_city(Vec::<ui::Departure>::default().deref().into());
+				ui.set_schedule_from_city(Vec::<ui::Departure>::default().deref().into());
+			}).ok();
+
+			let mut line_dist: HashMap<String, (usize, u32)> = Default::default();
+			let mut entries: BTreeSet<Departure> = Default::default();
+			let sleep_dur = time::Duration::from_secs(60);
+
+			loop {
+				match time::timeout(sleep_dur, rx.recv()).await {
+					Ok(Some(new_entries)) => {
+						for entry in new_entries {
+							let stop = bus_stops.get(entry.local_stop_idx)
+								.map(|(_id, stop)| stop)
+								.unwrap();
+
+							line_dist.entry(entry.line.clone())
+								.and_modify(|(idx, dist)| {
+									if stop.distance < *dist {
+										*idx = entry.local_stop_idx;
+										*dist = stop.distance;
+									}
+								})
+								.or_insert((entry.local_stop_idx, stop.distance));
+													
+							entries.replace(entry);
+						}
+					},
+					Ok(None) => break,
+					Err(_) => {},
+				}
+				log::debug!("updating UI...");
+
+				let now = Local::now();
+				entries.retain(|e| e.time_real > now
+					&& line_dist.get(&e.line)
+						.map(|(i,_)| *i == e.local_stop_idx)
+						.unwrap_or(true)
+				);
+
+				let mut entries: Vec<_> = entries.iter().collect();
+				entries.sort_by(|a, b| {
+					a.time_real.cmp(&b.time_real)
+						.then_with(||
+							bus_stops.get(a.local_stop_idx)
+								.zip(bus_stops.get(b.local_stop_idx))
+								.map(|(a, b)| (a.1.distance, b.1.distance))
+								.map(|(a, b)| a.cmp(&b))
+								.unwrap()
+						)
+				});
+
+				let num = entries.len();
+				let (depar_into_city, depar_from_city) = entries.into_iter()
+					.cloned()
+					.partition::<Vec<_>, _>(|depart| depart.into_city);
+
+				ui.upgrade_in_event_loop(|ui| {
+						fn set_departures(mrc: ModelRc<ui::Departure>, deps: Vec<Departure>) {
+							let model = mrc.as_any()
+								.downcast_ref::<VecModel<ui::Departure>>()
+								.expect("unexpected ui model");
+
+							let deps: Vec<ui::Departure> = deps.into_iter().map(Into::into).collect(); 
+							model.set_vec(deps);
+						}
+
+						set_departures(ui.get_schedule_into_city(), depar_into_city);
+						set_departures(ui.get_schedule_from_city(), depar_from_city);
+				}).inspect_err(log_err).ok();
+				
+				log::info!("updated {num} departures...");
 			}
 		}
 	});
@@ -386,6 +469,13 @@ async fn io_run(ui: Weak<ui::App>, conf: Config, run_token: CancellationToken) -
 	Ok(())
 }
 
+fn log_err<E>(err: &E)
+where
+	E: std::fmt::Display
+{
+	log::warn!("failed to update UI: {err}");
+}
+
 fn locale() -> chrono::Locale {
 	static LOCALE_INIT: Once = Once::new();
 	static mut LOCALE: chrono::Locale = chrono::Locale::POSIX;
@@ -393,10 +483,13 @@ fn locale() -> chrono::Locale {
 	unsafe {
 		LOCALE_INIT.call_once(|| {
 			match sys_locale::get_locale()
-				.and_then(|locstr| chrono::Locale::try_from(locstr.as_str()).ok())
+				.ok_or("detect system locale".to_owned())
+				.and_then(|locstr| chrono::Locale::try_from(locstr.replace('-', "_").as_str())
+					.map_err(|_err| format!("parse system locale '{locstr}'"))
+				)
 			{
-				Some(loc) => LOCALE = loc,
-				None => log::error!("failed to get system locale"),
+				Ok(loc) => LOCALE = loc,
+				Err(err) => log::error!("failed to {err}"),
 			}
 		});
 		LOCALE
@@ -405,8 +498,8 @@ fn locale() -> chrono::Locale {
 
 #[derive(Clone, Debug, Default)]
 struct Departure {
-	time: DateTime<Local>,
-	delay: i32,
+	time_sched: DateTime<Local>,
+	time_real: DateTime<Local>,
 
 	line: String,
 	line_destination: String,
@@ -418,7 +511,7 @@ struct Departure {
 impl Hash for Departure {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.local_stop_idx.hash(state);
-		self.time.hash(state);
+		self.time_sched.hash(state);
 		self.line.hash(state);
 		self.line_destination.hash(state);
 	}
@@ -427,19 +520,32 @@ impl Hash for Departure {
 impl PartialEq for Departure {
 	fn eq(&self, other: &Self) -> bool {
 		self.local_stop_idx == other.local_stop_idx
-			&& self.time == other.time
+			&& self.time_sched == other.time_sched
 			&& self.line == other.line
 			&& self.line_destination == other.line_destination
 	}
 }
 impl Eq for Departure {}
 
+impl PartialOrd for Departure {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Departure {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.line.cmp(&other.line)
+        	.then_with(|| self.line_destination.cmp(&other.line_destination))
+        	.then_with(|| self.time_sched.cmp(&other.time_sched))
+    }
+}
+
 impl Into<ui::Departure> for Departure {
 	fn into(self) -> ui::Departure {
 		ui::Departure {
-			time: self.time.format("%H:%M").to_string().into(),
-			delay: self.delay,
-			deadline: (self.time.timestamp() / 60) as i32 + self.delay,
+			time: self.time_sched.format("%H:%M").to_string().into(),
+			delay: (self.time_real - self.time_sched).num_minutes() as _,
+			deadline: (self.time_real.timestamp() / 60) as _,
 
 			line: self.line.into(),
 			final_stop: self.line_destination.into(),
@@ -503,25 +609,22 @@ impl<'de> Deserialize<'de> for Departure {
 		let stop = Stop::deserialize(deserializer)?;
 		let time_sched = {
 			let ts = stop.time_sched;
-			chrono::Local
-				.ymd(ts.year as _, ts.month, ts.day)
-				.and_hms(ts.hour, ts.minute, 0)
+			chrono::Local.with_ymd_and_hms(ts.year as _, ts.month, ts.day, ts.hour, ts.minute, 0)
+				.latest()
+				.ok_or(serde::de::Error::custom("failed to parse scheduled time"))?
 		};
-		let delay = stop
-			.time_real
-			.map(|ts| {
-				chrono::Local
-					.ymd(ts.year as _, ts.month, ts.day)
-					.and_hms(ts.hour, ts.minute, 0)
-			})
-			.map(|ts_real| (ts_real - time_sched).num_minutes())
-			.unwrap_or_default();
+		let time_real = stop.time_real
+			.and_then(|ts|
+				chrono::Local.with_ymd_and_hms(ts.year as _, ts.month, ts.day, ts.hour, ts.minute, 0)
+					.latest()
+			)
+			.unwrap_or(time_sched);
 
 		let into_city = stop.line.proj.direction == "R" || stop.line.direction.contains("Hbf"); // HACK: remove me
 
 		Ok(Departure {
-			time: time_sched,
-			delay: delay as i32,
+			time_sched,
+			time_real,
 			line: stop.line.symbol,
 			line_destination: stop.line.direction,
 			into_city,

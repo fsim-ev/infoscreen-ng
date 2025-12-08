@@ -53,9 +53,8 @@ export struct Departure  {
 
 export global State  {
     in property<int> time;
-	in property <[BusStop]> local_stop_list;
+	in property <[BusStop]> local-stop-list;
 }
-
 
 component EntryPanel inherits Rectangle {
 	in property <Departure> data;
@@ -182,7 +181,7 @@ component EntryPanel inherits Rectangle {
 	}
 }
 
-export component Panel inherits Rectangle {
+export component SchedulePanel inherits Rectangle {
 	in property <[Departure]> schedule;
 	in property <string> direction;
 	in property <color> direction-color;
@@ -276,15 +275,18 @@ export component Panel inherits Rectangle {
 
 export component BusStopList inherits VerticalLayout {
 	in property <[BusStop]> data: State.local_stop_list;
+	in property <int> idx-updating: -1;
+
 	in property <color> text-color: #888;
 
-	for bus-stop in root.data : HorizontalLayout {
+	for bus-stop[idx] in root.data : HorizontalLayout {
 		alignment: space-between;
 		spacing: 5px;
 
 		Text {
 			text: bus-stop.name;
 			font-size: 20px;
+			font-weight: idx == idx-updating ? 700 : 500;
 			color: bus-stop.color;
 			vertical-alignment: center;
 
@@ -303,6 +305,58 @@ export component BusStopList inherits VerticalLayout {
 			color: root.text-color;
 			vertical-alignment: center;
 			//width: 60px;
+		}
+	}
+}
+
+
+export component Panel inherits Rectangle {
+	in property <[Departure]> schedule-into-city;
+	in property <[Departure]> schedule-from-city;
+
+	background: #272b30;
+
+	// Departure panels
+	VerticalLayout {
+		alignment: stretch;
+
+		SchedulePanel {
+			schedule: root.schedule-into-city;
+			direction: "Stadt";
+			direction-color: #E6B867;
+			vertical-stretch: 2;
+		}
+		SchedulePanel {
+			schedule: root.schedule-from-city;
+			direction: "A3";
+			direction-color: #3287EB;
+			vertical-stretch: 2;
+		}
+	}
+
+	// Bus stop list
+	Rectangle {
+		height: 32px * busstop-panel.data.length;
+		width: 380px;
+		padding: 10px;
+
+		x: parent.width - self.width - self.padding;
+		y: parent.height - self.height - self.padding;
+		z: 10;
+
+		border-radius: 2px;
+		border-width: 2px;
+		border-color: #555;
+		background: #333;
+
+		cache-rendering-hint: true;
+
+		busstop-panel := BusStopList {
+			text-color: #888;
+
+			padding: 5px;
+			padding-left: 7px;
+			padding-right: self.padding-left;
 		}
 	}
 }
