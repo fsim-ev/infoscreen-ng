@@ -57,29 +57,31 @@
         };
 
         infoscreen-bus-schedule = craneLib.buildPackage (
-          individualCrateArgs  // (wrapper "infoscreen-bus-schedule") // {
+          individualCrateArgs  // (wrapper "infoscreen-bus-schedule") // rec {
             pname = "infoscreen-bus-schedule";
             cargoExtraArgs = "-p infoscreen-bus-schedule --all-features";
             src = ./.;
-                  # --prefix LD_LIBRARY_PATH : ${pkgs.wayland}/lib
+            meta.mainProgram = pname;
           }
         );
         infoscreen-todo-list = craneLib.buildPackage (
-          individualCrateArgs  // (wrapper "infoscreen-todo-list") //{
+          individualCrateArgs  // (wrapper "infoscreen-todo-list") // rec {
             pname = "infoscreen-todo-list";
             cargoExtraArgs = "-p infoscreen-todo-list --all-features";
             src = ./.;
+            meta.mainProgram = pname;
           }
         );
         infoscreen-timetable = craneLib.buildPackage (
-          individualCrateArgs // (wrapper "infoscreen-timetable") // {
+          individualCrateArgs // (wrapper "infoscreen-timetable") // rec {
             pname = "infoscreen-timetable";
             cargoExtraArgs = "--all-features";
             src = ./.;
+            meta.mainProgram = pname;
           }
         );
     in {
-      devShells.x86_64-linux.default = craneLib.devShell {
+      devShells.default = craneLib.devShell {
         nativeBuildInputs = with pkgs; [
           rustc
           cargo
