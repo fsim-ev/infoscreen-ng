@@ -1,15 +1,85 @@
 {
   description = "A very basic flake";
 
-  inputs = { nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable"; };
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    crane.url = "github:ipetkov/crane";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
 
-  outputs = { self, nixpkgs, }@inputs:
-    let
-      pkgs = import nixpkgs { system = "x86_64-linux"; };
-      libPath = with pkgs;
-        lib.makeLibraryPath [ fontconfig libxkbcommon libGL wayland ];
+  outputs = { self, nixpkgs, crane, flake-utils }:
+     flake-utils.lib.eachDefaultSystem (
+          system:
+          let
+            pkgs = nixpkgs.legacyPackages.${system};
+
+            inherit (pkgs) lib;
+
+            craneLib = crane.mkLib pkgs;
+            src = craneLib.cleanCargoSource ./.;
+
+            # Common arguments can be set here to avoid repeating them later
+            commonArgs = {
+              inherit src;
+              strictDeps = true;
+
+              buildInputs =  with pkgs; [
+                wayland
+                wayland-protocols
+                # Add additional build inputs here
+              ];
+              propagetedBuildInputs = with pkgs; [
+                wayland
+                wayland-protocols
+                
+              ];
+            };
+        # Build *just* the cargo dependencies (of the entire workspace),
+        # so we can reuse all of that work (e.g. via cachix) when running in CI
+        # It is *highly* recommended to use something like cargo-hakari to avoid
+        # cache misses when building individual top-level-crates
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+        individualCrateArgs = commonArgs // {
+          inherit cargoArtifacts;
+          inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
+          doCheck = false;
+        };
+        libPath = with pkgs;
+          lib.makeLibraryPath [ fontconfig libxkbcommon libGL wayland ];
+        wrapper = name: {
+            buildInputs = [pkgs.makeWrapper ];
+            postInstall = ''
+                wrapProgram $out/bin/${name} \
+                  --prefix LD_LIBRARY_PATH : ${libPath}
+              '';
+          
+        };
+
+        infoscreen-bus-schedule = craneLib.buildPackage (
+          individualCrateArgs  // (wrapper "infoscreen-bus-schedule") // {
+            pname = "infoscreen-bus-schedule";
+            cargoExtraArgs = "-p infoscreen-bus-schedule --all-features";
+            src = ./.;
+                  # --prefix LD_LIBRARY_PATH : ${pkgs.wayland}/lib
+          }
+        );
+        infoscreen-todo-list = craneLib.buildPackage (
+          individualCrateArgs  // (wrapper "infoscreen-todo-list") //{
+            pname = "infoscreen-todo-list";
+            cargoExtraArgs = "-p infoscreen-todo-list --all-features";
+            src = ./.;
+          }
+        );
+        infoscreen-timetable = craneLib.buildPackage (
+          individualCrateArgs // (wrapper "infoscreen-timetable") // {
+            pname = "infoscreen-timetable";
+            cargoExtraArgs = "--all-features";
+            src = ./.;
+          }
+        );
     in {
-      devShells.x86_64-linux.default = pkgs.mkShell {
+      devShells.x86_64-linux.default = craneLib.devShell {
         nativeBuildInputs = with pkgs; [
           rustc
           cargo
@@ -26,6 +96,8 @@
         # PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
       };
 
-      packages.x86_64-linux.default = pkgs.callPackage ./pkg.nix { };
-    };
+      packages = {
+        inherit infoscreen-bus-schedule infoscreen-todo-list infoscreen-timetable;
+      };
+    });
 }

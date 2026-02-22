@@ -7,6 +7,7 @@ edition = "2021"
 build = "build.rs"
 
 [workspace]
+resolver = "2"
 members = ["bus-schedule", "todo-list"]
 
 [workspace.dependencies]
