@@ -46,7 +46,7 @@
           doCheck = false;
         };
         libPath = with pkgs;
-          lib.makeLibraryPath [ fontconfig libxkbcommon libGL wayland ];
+          lib.makeLibraryPath [ fontconfig libxkbcommon libGL wayland noto-fonts-cjk-sans];
         wrapper = name: {
             buildInputs = [pkgs.makeWrapper ];
             postInstall = ''
